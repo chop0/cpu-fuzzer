@@ -114,7 +114,6 @@ restore_fs_gs_base:
 
 .macro read_vector_regs_ bank, start, end, offset=0
     vmovups offset (%r15), %\bank\start
-    ; vpxorq %\bank\start, %\bank\start, %\bank\start
     .if \end-\start
         read_vector_regs_ bank, %(\start+1), \end, %(\offset+64)
     .endif
