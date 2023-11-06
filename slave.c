@@ -13,7 +13,7 @@
 #include <stdbool.h>
 #include <fenv.h>
 
-#define CODE_SIZE 4096
+#define CODE_SIZE 4096*16
 #define CODE_REGION ((void*)0x41414000)
 
 void jump_to_code(void *code, struct saved_state *saved_state);

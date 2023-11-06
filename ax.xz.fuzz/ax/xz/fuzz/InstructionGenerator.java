@@ -55,7 +55,7 @@ public class InstructionGenerator {
 	}
 
 	public BasicBlock createBasicBlock(RandomGenerator rng) throws InstructionGenerator.NoPossibilitiesException {
-		var instructions = new Instruction[rng.nextInt(1, 100)];
+		var instructions = new Instruction[rng.nextInt(1, 1000)];
 		var opcodes = new Opcode[instructions.length];
 
 		for (int i = 0; i < instructions.length; i++) {

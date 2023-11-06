@@ -53,7 +53,7 @@ public class Tester {
 
 	public static Opcode findInstructionOpcode(CombinedBlock block, long faultOffset) throws CombinedBlock.UnencodeableException {
 		try (var arena = Arena.ofConfined()) {
-			var code = arena.allocate(4096, 4096);
+			var code = arena.allocate(4096*16, 4096);
 			int[] locations = block.encode(code);
 
 			if (faultOffset >= locations.length)
