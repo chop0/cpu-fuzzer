@@ -17,12 +17,12 @@ public class Main {
 		// void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 
 		var scratch1 = mmap(MemorySegment.ofAddress(0x10000000), 4096, PROT_READ() | PROT_WRITE() | PROT_EXEC(),
-				MAP_FIXED() | MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0).asSlice(0, 4096);
+				MAP_FIXED() | MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0).asSlice(0, 0);
 		if (scratch1.address() == MAP_FAILED().address())
 			throw new RuntimeException("mmap failed");
 
 		var scratch2 = mmap(MemorySegment.ofAddress(0x20000000), 4096, PROT_READ() | PROT_WRITE() | PROT_EXEC(),
-				MAP_FIXED() | MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0).asSlice(0, 4096);
+				MAP_FIXED() | MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0).asSlice(0, 0);
 		if (scratch2.address() == MAP_FAILED().address())
 			throw new RuntimeException("mmap failed");
 
