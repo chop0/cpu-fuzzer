@@ -32,6 +32,7 @@ public class InstructionGenerator {
 					if (insn.getFlowControl() != NEXT
 						|| field.getName().startsWith("F")
 						|| insn.isPrivileged()
+						|| insn.isStackInstruction()
 						|| blacklistedOpcodes.contains(opCode) ||
 						disallowedPrefixes.stream().anyMatch(n -> field.getName().contains(n))) // skip control flow, privileged and mpx
 						return null;
