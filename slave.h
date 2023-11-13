@@ -35,3 +35,4 @@ struct execution_result {
 };
 
 void do_test(uint8_t *code, size_t code_length, struct execution_result *result);
+void test_case_finish(void);

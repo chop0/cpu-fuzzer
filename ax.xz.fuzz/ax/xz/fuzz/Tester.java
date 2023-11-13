@@ -40,7 +40,7 @@ public class Tester {
 		}
 	}
 
-	public static ExecutionResult runBlock(CPUState startState, MemorySegment code) throws CombinedBlock.UnencodeableException {
+	public static ExecutionResult runBlock(CPUState startState, MemorySegment code) {
 		try (var arena = Arena.ofConfined()) {
 
 			var output = execution_result.allocate(arena);

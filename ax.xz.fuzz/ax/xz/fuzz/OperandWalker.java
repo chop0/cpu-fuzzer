@@ -20,6 +20,7 @@ public class OperandWalker extends OperandBaseListener {
 	public Operand getOperand() {
 		return operand;
 	}
+
 	@Override
 	public void enterFixedReg(OperandParser.FixedRegContext ctx) {
 		operand = (new FixedReg(Registers.byName(ctx.getText())));

@@ -81,8 +81,7 @@ public record CombinedBlock(BasicBlock lhs, BasicBlock rhs, BitSet picks) {
 			}
 		}
 
-		var locationsCut = Arrays.copyOf(locations, rip );
-		return locationsCut;
+		return Arrays.copyOf(locations, rip );
 	}
 
 	public static class UnencodeableException extends Exception {

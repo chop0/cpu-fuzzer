@@ -17,45 +17,31 @@ import java.util.stream.IntStream;
 import static java.util.stream.Stream.concat;
 
 public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant, Operand[] operands) {
-	public Opcode {
-		if (Arrays.stream(operands).allMatch(n -> n.fulfilledBy(ResourcePartition.all(true)))) {
-			// guess the width of the immediate operands
-			var insn = Instruction.create(icedVariant);
-			int explicitOpIdx = 0;
+	public Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant, Operand[] operands) {
+		this.prefixes = prefixes;
+		this.mnemonic = mnemonic;
+		this.icedVariant = icedVariant;
+		this.operands = operands;
 
-			var random = new Random(0);
+		// guess the width of the immediate operands
+		var insn = configureRandomly(new Random(0), ResourcePartition.all(true));
+
+		var encoder = new Encoder(64, _ -> {
+		});
+
+		int[] explicitIndexMap = IntStream.range(0, operands.length).filter(n -> operands[n] instanceof Operand.Counted).toArray();
+		for (; ; ) {
 			try {
-				for (var operand : operands) {
-					switch (operand) {
-						case Operand.Counted counted ->
-								counted.setRandom(random, insn, explicitOpIdx++, ResourcePartition.all(true));
-						case Operand.Uncounted uncounted ->
-								uncounted.setRandom(random, insn, ResourcePartition.all(true));
-						case Operand.SuppressedOperand _ -> {
-						}
-					}
-				}
-			} catch (InstructionGenerator.NoPossibilitiesException e) {
-				throw new RuntimeException(e);
-			}
-
-			var encoder = new Encoder(64, _ -> {
-			});
-
-			int[] explicitIndexMap = IntStream.range(0, operands.length).filter(n -> operands[n] instanceof Operand.Counted).toArray();
-			for (; ; ) {
-				try {
-					encoder.encode(insn, 0);
+				encoder.encode(insn, 0);
+				break;
+			} catch (Exception e) {
+				if (e.getMessage().contains("Expected OpKind")) { // todo: this is terribel
+					int opKind = Integer.parseInt(e.getMessage().split("Expected OpKind: ")[1].split(",")[0]);
+					int index = Integer.parseInt(e.getMessage().split("Operand ")[1].split(":")[0]);
+					operands[explicitIndexMap[index]] = new Operand.Counted.Imm(((Operand.Counted.Imm) operands[explicitIndexMap[index]]).bitSize(), opKind);
+					insn.setOpKind(index, opKind);
+				} else {
 					break;
-				} catch (Exception e) {
-					if (e.getMessage().contains("Expected OpKind")) { // todo: this is terribel
-						int opKind = Integer.parseInt(e.getMessage().split("Expected OpKind: ")[1].split(",")[0]);
-						int index = Integer.parseInt(e.getMessage().split("Operand ")[1].split(":")[0]);
-						operands[explicitIndexMap[index]] = new Operand.Counted.Imm(((Operand.Counted.Imm) operands[explicitIndexMap[index]]).bitSize(), opKind);
-						insn.setOpKind(index, opKind);
-					} else {
-						break;
-					}
 				}
 			}
 		}
@@ -74,7 +60,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 			return null;
 
 		var operands = concat(Arrays.stream(parts).dropWhile(prefixes::contains).skip(1)
-								.map(part -> tryParseOperand(part, prefixes)).filter(Objects::nonNull),
+						.map(part -> tryParseOperand(part, prefixes)).filter(Objects::nonNull),
 				Arrays.stream(sops))
 				.toArray(Operand[]::new);
 
@@ -107,24 +93,25 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 		return listener.getOperand();
 	}
 
-	Instruction ofRandom(ResourcePartition resourcePartition, RandomGenerator randomGenerator) throws InstructionGenerator.NoPossibilitiesException {
+	Instruction ofRandom(ResourcePartition resourcePartition, RandomGenerator randomGenerator) throws BlockGenerator.NoPossibilitiesException {
 		var insn = Instruction.create(icedVariant);
 
 		int explicitOpIdx = 0;
 		for (var operand : operands) {
 			switch (operand) {
-				case Operand.Counted counted ->
-						counted.setRandom(randomGenerator, insn, explicitOpIdx++, resourcePartition);
+				case Operand.Counted counted -> {
+					counted.setRandom(randomGenerator, insn, explicitOpIdx++, resourcePartition);
+					if (insn.getOpKind(explicitOpIdx - 1) == OpKind.REGISTER)
+						if (RegisterSet.EXTENDED_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
+							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.LEGACY_HIGH_GP));
+						else if (RegisterSet.LEGACY_HIGH_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
+							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.EXTENDED_GP));
+				}
 				case Operand.Uncounted uncounted -> uncounted.setRandom(randomGenerator, insn, resourcePartition);
 				case Operand.SuppressedOperand _ -> {
 				}
 			}
 
-			if (explicitOpIdx > 0 && insn.getOpKind(explicitOpIdx - 1) == OpKind.REGISTER)
-				if (RegisterSet.EXTENDED_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
-					resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.LEGACY_HIGH_GP));
-				else if (RegisterSet.LEGACY_HIGH_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
-					resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.EXTENDED_GP));
 		}
 
 		return insn;
@@ -132,6 +119,27 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 
 	boolean fulfilledBy(boolean evex, ResourcePartition rp) {
 		return (evex || !prefixes.contains(Prefix.EVEX)) && Arrays.stream(operands).allMatch(n -> n.fulfilledBy(rp));
+	}
+
+	public Instruction configureRandomly(RandomGenerator random, ResourcePartition rp) {
+		var insn = Instruction.create(icedVariant);
+		int explicitOpIdx = 0;
+
+		try {
+			for (var operand : operands) {
+				switch (operand) {
+					case Operand.Counted counted ->
+							counted.setRandom(random, insn, explicitOpIdx++, rp);
+					case Operand.Uncounted uncounted -> uncounted.setRandom(random, insn, rp);
+					case Operand.SuppressedOperand _ -> {
+					}
+				}
+			}
+		} catch (BlockGenerator.NoPossibilitiesException e) {
+			throw new RuntimeException(e);
+		}
+
+		return insn;
 	}
 
 

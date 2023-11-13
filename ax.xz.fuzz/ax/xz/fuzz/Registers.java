@@ -15,7 +15,6 @@ import static com.github.icedland.iced.x86.Register.GS;
 
 
 public class Registers {
-	public static RegisterSet SPECIAL = RegisterSet.of(Registers.MXCSR);
 
 	public static int MXCSR = 256, GDTR = 257, LDTR = 258, IDTR = 259, TR = 260, MSRS = 261;
 

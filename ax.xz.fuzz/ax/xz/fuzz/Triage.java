@@ -48,7 +48,7 @@ public class Triage {
 	}
 
 
-	public static void main(String[] args) throws InstructionGenerator.NoPossibilitiesException, CombinedBlock.UnencodeableException {
+	public static void main(String[] args) throws BlockGenerator.NoPossibilitiesException, CombinedBlock.UnencodeableException {
 		// void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 
 		var scratch1 = mmap(MemorySegment.ofAddress(0x10000000), 4096, PROT_READ() | PROT_WRITE() | PROT_EXEC(),

@@ -211,6 +211,7 @@ test_case_start:
 
     jmp *addr(%rip)
 
+.global test_case_finish
 test_case_finish:
     movq %r15, temp(%rip)
     movq saved_state(%rip), %r15

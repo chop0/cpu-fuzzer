@@ -17,6 +17,7 @@
 --include-constant TRAP_TRACE
 --include-function do_test
 --include-function mmap
+--include-function munmap
 --include-constant PROT_READ
 --include-constant PROT_WRITE
 --include-constant PROT_EXEC

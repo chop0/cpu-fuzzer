@@ -1,8 +1,6 @@
 package ax.xz.fuzz;
 
 
-import com.github.icedland.iced.x86.Register;
-
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Objects;
@@ -11,7 +9,6 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static ax.xz.fuzz.Registers.SPECIAL;
 import static com.github.icedland.iced.x86.Register.*;
 import static java.util.stream.IntStream.rangeClosed;
 
@@ -22,7 +19,11 @@ public final class RegisterSet {
 	public static RegisterSet GPQ = RegisterSet.of(rangeClosed(RAX, R15).toArray());
 	public static RegisterSet GP = GPB.union(GPW).union(GPD).union(GPQ);
 
-	public static RegisterSet EXTENDED_GP = RegisterSet.of(rangeClosed(R8L, R15L).toArray()).union(RegisterSet.of(SIL, DIL, SPL, BPL));
+	public static RegisterSet EXTENDED_GP = GPQ // things that trigger rex prefix
+			.union(RegisterSet.of(rangeClosed(R8D, R15D).toArray()))
+			.union(RegisterSet.of(rangeClosed(R8W, R15W).toArray()))
+			.union(RegisterSet.of(rangeClosed(R8L, R15L).toArray()))
+			.union(RegisterSet.of(SIL, DIL, SPL, BPL));
 	public static RegisterSet LEGACY_HIGH_GP = RegisterSet.of(AH, CH, DH, BH);
 
 	public static RegisterSet MM = RegisterSet.of(rangeClosed(MM0, MM7).toArray());
@@ -47,6 +48,7 @@ public final class RegisterSet {
 	public static RegisterSet MASK = RegisterSet.of(rangeClosed(K0, K7).toArray());
 
 	public static RegisterSet SEGMENT = RegisterSet.of(rangeClosed(ES, GS).toArray());
+	public static final RegisterSet SPECIAL = of(Registers.MXCSR);
 	public static RegisterSet ALL_VEX = GP.union(VECTOR_VEX).union(MASK).union(SEGMENT).union(SPECIAL);
 	public static RegisterSet ALL_EVEX = GP.union(ST).union(VECTOR_EVEX).union(MASK).union(SEGMENT).union(SPECIAL);
 
@@ -228,5 +230,9 @@ public final class RegisterSet {
 		}
 
 		return new int[]{register};
+	}
+
+	public static RegisterSet getAssociatedRegisterSet(int register) {
+		return RegisterSet.of(getAssociatedRegisters(register));
 	}
 }
