@@ -10,10 +10,11 @@ import java.util.*;
 import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.tester.slave_h.*;
+import static com.github.icedland.iced.x86.FlowControl.*;
 
 public class BlockGenerator {
 	private static final Set<Integer> blacklistedOpcodes = Set.of(Code.WRPKRU, Code.RDSEED_R16, Code.RDSEED_R32, Code.RDSEED_R64, Code.RDTSC, Code.RDTSCP, Code.RDPMC, Code.RDRAND_R16, Code.RDRAND_R32, Code.RDRAND_R64, Code.XRSTOR_MEM, Code.XRSTORS_MEM, Code.XRSTOR64_MEM, Code.XRSTORS64_MEM, Code.RDPID_R32, Code.RDPID_R64, Code.RDPRU, Code.XSAVEOPT_MEM, Code.XSAVEOPT64_MEM);
-	private static final List<String> disallowedPrefixes = List.of("VEX", "EVEX", "BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
+	private static final List<String> disallowedPrefixes = List.of("BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
 
 	private static final Opcode[] allOpcodes;
 
@@ -73,7 +74,7 @@ public class BlockGenerator {
 
 			var result = Tester.runBlock(CPUState.filledWith(0), opcodes, instructions);
 			return !(result instanceof ExecutionResult.Fault.Sigill);
-		} catch (CombinedBlock.UnencodeableException e) {
+		} catch (BasicBlock.UnencodeableException e) {
 			return false;
 		} finally {
 			munmap(scratch, scratch.byteSize());
@@ -107,10 +108,6 @@ public class BlockGenerator {
 		}
 
 		return new BasicBlock(opcodes, instructions);
-	}
-
-	public void handleUnencodeable(Opcode opcode) {
-		disabled.add(opcode);
 	}
 
 	public static class NoPossibilitiesException extends Exception {

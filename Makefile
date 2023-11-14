@@ -7,7 +7,7 @@ run: ax.xz.fuzz libslave.so
 all: libslave.so ax.xz.fuzz
 
 libslave.so: test_entry_routine.S slave.c slave.h
-	gcc -fPIC -shared -o $@ $^
+	gcc -Wl,-z,relro,-z,now -fPIC -shared -o $@ $^
 
 ax.xz.fuzz: $(shell find ax.xz.fuzz -name "*.java") parse bindings
 	javac --enable-preview --source 21 -p $(MODULE_PATH) -d out --module ax.xz.fuzz --module-source-path .:gen

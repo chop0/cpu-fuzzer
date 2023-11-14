@@ -18,6 +18,9 @@
 --include-function do_test
 --include-function mmap
 --include-function munmap
+--include-struct sigjmp_buf
+--include-function __sigsetjmp
+--include-function siglongjmp
 --include-constant PROT_READ
 --include-constant PROT_WRITE
 --include-constant PROT_EXEC

@@ -172,6 +172,7 @@ jump_to_code:
     movq %rsi, saved_state(%rip)
 test_case_start:
     save_unclobberable_state
+    cpuid
 
     movq saved_state(%rip), %r15
     read_vector_regs 144

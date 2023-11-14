@@ -3,6 +3,7 @@ package ax.xz.fuzz;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.random.RandomGenerator;
 
@@ -32,10 +33,8 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 		}
 
 		var statusFlags = EnumSet.noneOf(StatusFlag.class);
-		for (var flag : StatusFlag.values()) {
-			if (rng.nextBoolean())
-				statusFlags.add(flag);
-		}
+		if (rng.nextBoolean())
+			Collections.addAll(statusFlags, StatusFlag.values());
 
 		return new ResourcePartition[]{
 				new ResourcePartition(statusFlags, new RegisterSet(lhsRegisters), new MemoryPartition[]{MemoryPartition.of(lhsMemory)}),

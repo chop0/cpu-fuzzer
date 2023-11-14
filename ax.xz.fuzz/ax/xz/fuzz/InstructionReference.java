@@ -43,6 +43,9 @@ public class InstructionReference {
 			s.put(mnemonic, all);
 		}
 
+		s.put("ZEROUPPER", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.SuppressedOperand.Reg::new).toArray(Operand.SuppressedOperand[]::new));
+		s.put("ZEROALL", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.SuppressedOperand.Reg::new).toArray(Operand.SuppressedOperand[]::new));
+
 		suppressedOperands = Collections.unmodifiableMap(s);
 	}
 
@@ -67,50 +70,6 @@ public class InstructionReference {
 					(V) alteratingsKeysAndValues[i + 1]);
 		return map;
 	}
-
-	private static final Map<String, String> equivalents = mapOf(
-			"JE", "JZ",
-			"CMOVE", "CMOVZ",
-
-			"JNE", "JNZ",
-			"CMOVNE", "CMOVNZ",
-
-			"JNAE", "JB",
-			"CMOVNAE", "CMOVB",
-
-			"JC", "JB",
-			"CMOVC", "CMOVB",
-
-			"JNA", "JBE",
-			"CMOVNA", "CMOVBE",
-
-			"JA", "JNBE",
-			"CMOVA", "CMOVNBE",
-
-			"JAE", "JNB",
-			"CMOVAE", "CMOVNB",
-
-			"JNC", "JNB",
-			"CMOVNC", "CMOVNB",
-
-			"JNGE", "JL",
-			"CMOVNGE", "CMOVL",
-
-			"JGE", "JNL",
-			"CMOVGE", "CMOVNL",
-
-			"JNG", "JLE",
-			"CMOVNG", "CMOVLE",
-
-			"JG", "JNLE",
-			"CMOVG", "CMOVNLE",
-
-			"JPE", "JP",
-			"CMOVPE", "CMOVP",
-
-			"JPO", "JNP",
-			"CMOVPO", "CMOVNP"
-	);
 
 
 	private static String normaliseConditionalInstruction(Instruction instruction, String mnemonic) {

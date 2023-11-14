@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <sys/mman.h>
+#include <setjmp.h>
 
 #include <signal.h>
 

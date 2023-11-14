@@ -220,7 +220,7 @@ sealed interface Operand {
 		record VSIB(int indexWidth, RegisterSet possibleRegisters) implements Counted {
 			@Override
 			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
-				throw new UnsupportedOperationException();
+
 			}
 
 			@Override

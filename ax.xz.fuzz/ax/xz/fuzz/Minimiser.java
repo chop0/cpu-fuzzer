@@ -1,95 +1,105 @@
 package ax.xz.fuzz;
 
+import ax.xz.fuzz.tester.execution_result;
 import com.github.icedland.iced.x86.Instruction;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Objects;
+
+import static ax.xz.fuzz.tester.slave_h.*;
+import static ax.xz.fuzz.tester.slave_h.do_test;
+import static com.github.icedland.iced.x86.Register.R15;
 
 public class Minimiser {
-	public static void minimise(Runnable reset, CombinedBlock a, CombinedBlock b) throws CombinedBlock.UnencodeableException {
-		if (a.lhs() != b.lhs() || a.rhs() != b.rhs())
-			throw new IllegalArgumentException("a.lhs() != b.lhs() || a.rhs() != b.rhs()");
-
-		var lhsSkips = new BitSet(a.lhs().size());
-		var rhsSkips = new BitSet(a.rhs().size());
-
-		outer: for (;;) {
+	public static void minimise(Runnable reset, InterleavedBlock[] test1, InterleavedBlock[] test2, TestCase.Branch[] branches) throws BasicBlock.UnencodeableException {
+		for (;;) {
 			boolean changed = false;
-			inner: for (int i = 0; i < a.lhs().size(); i++) {
-				if (lhsSkips.get(i))
-					continue inner;
 
-				lhsSkips.set(i);
-				reset.run();
-				if (!checkMismatch(a, b, lhsSkips, rhsSkips)) {
-					lhsSkips.clear(i);
-				} else {
-					System.out.println("Found redundant instruction in LHS at " + i);
-					changed = true;
+			for (int block = 0; block < test1.length; block++) {
+				var a = test1[block];
+				var b = test2[block];
+
+				for (int i = 0; i < a.lhsIndices().length; i++) {
+					reset.run();
+
+					int test1Index = a.lhsIndices()[i];
+					int test2Index = b.lhsIndices()[i];
+
+					var aWithout = a.without(test1Index);
+					var bWithout = b.without(test2Index);
+
+					var test1Changed = test1.clone();
+					var test2Changed = test2.clone();
+
+					test1Changed[block] = aWithout;
+					test2Changed[block] = bWithout;
+
+					var test1Result = run(new TestCase(test1Changed, branches));
+					var test2Result = run(new TestCase(test2Changed, branches));
+
+					if (mismatch(test1Result, test2Result)) {
+						test1[block] = aWithout;
+						test2[block] = bWithout;
+						System.out.println("Found redundant instruction in LHS at " + i);
+						changed = true;
+					}
 				}
-			}
 
-			for (int i = 0; i < a.rhs().size(); i++) {
-				if (rhsSkips.get(i))
-					continue ;
+				for (int i = 0; i < a.rhsIndices().length; i++) {
+					reset.run();
 
-				rhsSkips.set(i);
-				reset.run();
-				if (!checkMismatch(a, b, lhsSkips, rhsSkips)) {
-					rhsSkips.clear(i);
-				} else {
-					System.out.println("Found redundant instruction in RHS at " + i);
-					changed = true;
+					int test1Index = a.rhsIndices()[i];
+					int test2Index = b.rhsIndices()[i];
+
+					var aWithout = a.without(test1Index);
+					var bWithout = b.without(test2Index);
+
+					var test1Changed = test1.clone();
+					var test2Changed = test2.clone();
+
+					test1Changed[block] = aWithout;
+					test2Changed[block] = bWithout;
+
+					var test1Result = run(new TestCase(test1Changed, branches));
+					var test2Result = run(new TestCase(test2Changed, branches));
+
+					if (mismatch(test1Result, test2Result)) {
+						test1[block] = aWithout;
+						test2[block] = bWithout;
+						System.out.println("Found redundant instruction in LHS at " + i);
+						changed = true;
+					}
 				}
 			}
 
 			if (!changed)
-				break ;
+				break;
 		}
 
-		var aFinal = pick(a.picks(), a.lhs().instructions(), a.rhs().instructions(), lhsSkips, rhsSkips);
-		var bFinal = pick(b.picks(), a.lhs().instructions(), a.rhs().instructions(), lhsSkips, rhsSkips);
-
 		System.out.println("Minimised A:");
-		System.out.println(Arrays.stream(aFinal)
-				.map(Instruction::toString)
-						.map(n -> {
-							var split = n.split(" ", 2);
-							var arguments = split.length > 1 ? split[1].replaceAll("([A-Fa-f0-9]{2,40})h", "0x$1") : "";
-							arguments = arguments.replaceAll(" ptr", "_ptr");
-							arguments = arguments.replace('[', '(');
-							arguments = arguments.replace(']', ')');
-							return "assembler." + split[0] + "(" + arguments + ");";
-						})
-				.reduce((a_, b_) -> a_ + "\n" + b_)
-				.orElse(""));
+		System.out.println(new TestCase(test1, branches));
 		System.out.println("Minimised B:");
-		System.out.println(Arrays.stream(bFinal)
-				.map(Instruction::toString)
-						.map(n -> {
-							var split = n.split(" ", 2);
-							var arguments = split.length > 1 ? split[1].replaceAll("([A-Fa-f0-9]{2,40})h", "0x$1") : "";
-							arguments = arguments.replaceAll(" ptr", "_ptr");
-							arguments = arguments.replace('[', '(');
-							arguments = arguments.replace(']', ')');
-
-							return "assembler." + split[0] + "(" + arguments + ");";
-						})
-				.reduce((a_, b_) -> a_ + "\n" + b_)
-				.orElse(""));
+		System.out.println(new TestCase(test2, branches));
 	}
 
-	private static boolean checkMismatch(CombinedBlock a, CombinedBlock b, BitSet lhsBitset, BitSet rhsBitset) throws CombinedBlock.UnencodeableException {
-		var aMaskedInstructions = pick(a.picks(), a.lhs().instructions(), a.rhs().instructions(), lhsBitset, rhsBitset);
-		var bMaskedInstructions = pick(b.picks(), a.lhs().instructions(), a.rhs().instructions(), lhsBitset, rhsBitset);
+	private static ExecutionResult run(TestCase tc) {
+		try (var arena = Arena.ofConfined()) {
+			var code = mmap(MemorySegment.NULL, 4096*16L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0)
+					.reinterpret(4096 * 16, arena, ms -> munmap(ms, 4096 * 16L));
 
-		var aMaskedOpcodes = pick(a.picks(), a.lhs().opcodes(), a.rhs().opcodes(), lhsBitset, rhsBitset);
-		var bMaskedOpcodes = pick(b.picks(), a.lhs().opcodes(), a.rhs().opcodes(), lhsBitset, rhsBitset);
+			var buf = code.asByteBuffer();
+			 tc.encode(code.address(), buf::put, R15, 100);
 
-		var aResult = Tester.runBlock(CPUState.filledWith(0), aMaskedOpcodes, aMaskedInstructions);
-		var bResult = Tester.runBlock(CPUState.filledWith(0), bMaskedOpcodes, bMaskedInstructions);
+			var output = execution_result.allocate(arena);
+			CPUState.filledWith(0).toSavedState(execution_result.state$slice(output));
+			do_test(code, buf.position(), output);
 
-		return mismatch(aResult, bResult);
+			return ExecutionResult.ofStruct(output);
+		}
 	}
 
 
@@ -101,8 +111,7 @@ public class Minimiser {
 			if (rhsIndex == rhs.length || (lhsIndex < lhs.length && picks.get(i))) {
 				result[i] = lhsSkip.get(lhsIndex) ? null : lhs[lhsIndex];
 				lhsIndex++;
-			}
-			else {
+			} else {
 				result[i] = rhsSkip.get(rhsIndex) ? null : rhs[rhsIndex];
 				rhsIndex++;
 			}
@@ -113,6 +122,6 @@ public class Minimiser {
 
 	private static boolean mismatch(ExecutionResult a, ExecutionResult b) {
 		return (a instanceof ExecutionResult.Fault) != (b instanceof ExecutionResult.Fault)
-				|| ((a instanceof ExecutionResult.Success || b instanceof ExecutionResult.Success) && !a.equals(b));
+			   || ((a instanceof ExecutionResult.Success || b instanceof ExecutionResult.Success) && !a.equals(b));
 	}
 }

@@ -64,6 +64,9 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 				Arrays.stream(sops))
 				.toArray(Operand[]::new);
 
+		if (!Arrays.stream(operands).allMatch(n -> n.fulfilledBy(ResourcePartition.all(true))))
+			return null;
+
 		if (operands.length < Instruction.create(icedVariant).getOpCount())
 			throw new IllegalStateException("Not enough operands");
 

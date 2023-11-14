@@ -13,9 +13,6 @@
 #include <stdbool.h>
 #include <fenv.h>
 
-#define CODE_SIZE 4096*16
-#define CODE_REGION ((void*)0x41414000)
-
 void jump_to_code(void *code, struct saved_state *saved_state);
 void test_case_finish(void);
 
@@ -31,7 +28,7 @@ static struct sigaction saved_sigactions[NUM_IGNORED_SIGNALS];
 __attribute__ ((no_stack_protector))  // sicne we mess with fs
 static void segfault_handler(int signal, siginfo_t *si, void *ptr) {
     faulted = true;
-    fault_details = (struct fault_details){si->si_signo, si->si_code, (void*)(si->si_addr - CODE_REGION)};
+    fault_details = (struct fault_details){si->si_signo, si->si_code, (void*)(si->si_addr)};
     test_case_finish(); // doesnt return
 }
 
@@ -85,27 +82,15 @@ void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
                 perror("sigaltstack");
                 exit(EXIT_FAILURE);
             }
-
-           void *code_page = mmap(CODE_REGION, CODE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
-                                  MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-           if (code_page == MAP_FAILED) {
-               perror("mmap failed");
-               exit(EXIT_FAILURE);
-           }
            initialized = true;
     }
 
     save_signal_handlers();
     setup_signal_handlers();
 
-    memcpy(CODE_REGION, code, code_length);
-    memcpy(CODE_REGION + code_length, EPILOGUE, sizeof(EPILOGUE));
-    *(void * volatile*) (CODE_REGION + code_length + sizeof(EPILOGUE)) = test_case_finish;
-
     faulted = false;
 
-    jump_to_code(CODE_REGION, &output->state);
+    jump_to_code(code, &output->state);
     output->faulted = faulted;
     if (faulted) {
         memcpy(&output->fault, &fault_details, sizeof(output->fault));
