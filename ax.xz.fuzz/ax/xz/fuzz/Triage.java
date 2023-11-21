@@ -31,11 +31,10 @@ public class Triage {
  js 1
  jmp 2
  */
-	assembler.sub(ax, 0xB98F);
-	assembler.rcl(cx, 1);
-	assembler.pmovsxwq(xmm7, xmm10);
 
-	assembler.vpsrlq(xmm5, xmm9, 0x36);
+	assembler.mov(rcx, 1);
+	assembler.pmovsxwq(xmm0, xmm0);
+	assembler.vpsrlq(xmm0, xmm0, 0x36);
 	assembler.xgetbv();
 
 		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
@@ -69,12 +68,11 @@ public class Triage {
 
 
 		 */
-		assembler.sub(ax, 0xB98F);
-		assembler.rcl(cx, 1);
-		assembler.pmovsxwq(xmm7, xmm10);
+		assembler.mov(rcx, 1);
+		assembler.pmovsxwq(xmm0, xmm0);
 
 		assembler.xgetbv();
-		assembler.vpsrlq(xmm5, xmm9, 0x36);
+		assembler.vpsrlq(xmm0, xmm0, 0x36);
 		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
 
 
