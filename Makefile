@@ -1,5 +1,5 @@
 ANTLR_JAR = antlr-4.13.1-complete.jar
-MODULE_PATH = $(ANTLR_JAR):iced-x86-1.20.0.jar
+MODULE_PATH = $(ANTLR_JAR):iced-x86-1.20.0.jar:jackson-annotations-2.16.0-rc1.jar:jackson-core-2.16.0-rc1.jar:jackson-databind-2.16.0-rc1.jar
 
 run: ax.xz.fuzz libslave.so
 	java --enable-preview -Djava.library.path=. -p $(MODULE_PATH):out -m ax.xz.fuzz/ax.xz.fuzz.Main

@@ -1,3 +1,4 @@
+**/*.log
 **/*.so
 **/.gdb_history
 gen
