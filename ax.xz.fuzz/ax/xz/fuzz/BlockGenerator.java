@@ -11,10 +11,11 @@ import java.util.*;
 import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.tester.slave_h.*;
+import static com.github.icedland.iced.x86.Code.*;
 import static com.github.icedland.iced.x86.FlowControl.*;
 
 public class BlockGenerator {
-	private static final Set<Integer> blacklistedOpcodes = Set.of(Code.WRPKRU, Code.RDSEED_R16, Code.RDSEED_R32, Code.RDSEED_R64, Code.RDTSC, Code.RDTSCP, Code.RDPMC, Code.RDRAND_R16, Code.RDRAND_R32, Code.RDRAND_R64, Code.XRSTOR_MEM, Code.XRSTORS_MEM, Code.XRSTOR64_MEM, Code.XRSTORS64_MEM, Code.RDPID_R32, Code.RDPID_R64, Code.RDPRU, Code.XSAVEOPT_MEM, Code.XSAVEOPT64_MEM);
+	private static final Set<Integer> blacklistedOpcodes = Set.of(XGETBV, WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
 	private static final List<String> disallowedPrefixes = List.of("BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
 
 	private static final Opcode[] allOpcodes;
