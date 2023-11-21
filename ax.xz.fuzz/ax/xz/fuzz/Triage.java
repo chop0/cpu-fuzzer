@@ -16,89 +16,38 @@ public class Triage {
 		var assembler = new CodeAssembler(64);
 
 /**
- * 0:
- * btc cx,cx
- * blendps xmm8,xmm9,90h
- * paddq xmm5,xmm2
- * vpunpckhwd ymm13,ymm14,ymm14
- * psrld mm6,0B9h
- * mulsd xmm12,xmm10
- * sets dil
- * vfnmsub231ps xmm2,xmm14,xmm14
- * sha1rnds4 xmm13,xmm5,40h
- * vpextrq r9,xmm14,0DBh
- * pinsrw mm2,rdx,94h
- * packssdw mm5,mm1
- * vphaddd xmm7,xmm11,xmm0
- * crc32 r8d,r12d
- * setle ch
- * xgetbv
- * jnb 2
- * jmp 1
- *
- * 1:
- * vroundss xmm2,xmm13,xmm5,96h
- * vcvttps2dq xmm2,xmm2
- * dec bl
- * vpaddsb ymm12,ymm4,ymm10
- * test dl,r12b
- * addsubps xmm2,xmm5
- * vpermilps xmm8,xmm14,xmm5
- * extrq xmm10,0B8h,6Ah
- * vcvtpd2dq xmm14,xmm8
- * sbb r12w,54h
- * vmovaps xmm7,xmm4
- * vmaxps xmm2,xmm14,xmm14
- * pand mm0,mm6
- * movsx r11,bp
- * vfnmadd213pd ymm7,ymm7,ymm7
- * pcmpgtq xmm3,xmm11
- * pblendw xmm10,xmm7,0AEh
- * je 1
- * jmp 1
+ 0:
+ sub ax,0B98Fh
+ rcl cx,1
+ pmovsxwq xmm5,xmm6
+ vpavgb ymm5,ymm13,ymm6
+ js 1
+ jmp 1
+
+ 1:
+ vpsrlq xmm5,xmm9,36h
+ xgetbv
+ psignw xmm1,xmm10
+ js 1
+ jmp 2
  */
 	var zero = assembler.createLabel();
 	var one = assembler.createLabel();
 
-
 	assembler.label(zero);
-	assembler.btc(cx, cx);
-	assembler.blendps(xmm8, xmm9, 0x90);
-	assembler.paddq(xmm5, xmm2);
-	assembler.vpunpckhwd(ymm13, ymm14, ymm14);
-	assembler.psrld(mm6, 0xB9);
-	assembler.mulsd(xmm12, xmm10);
-	assembler.sets(dil);
-	assembler.vfnmsub231ps(xmm2, xmm14, xmm14);
-	assembler.sha1rnds4(xmm13, xmm5, 0x40);
-	assembler.vpextrq(r9, xmm14, 0xDB);
-	assembler.pinsrw(mm2, rdx, 0x94);
-	assembler.packssdw(mm5, mm1);
-	assembler.vphaddd(xmm7, xmm11, xmm0);
-	assembler.crc32(r8d, r12d);
-	assembler.setle(ch);
-	assembler.xgetbv();
+	assembler.sub(ax, 0xB98F);
+	assembler.rcl(cx, 1);
+	assembler.pmovsxwq(xmm5, xmm6);
+	assembler.vpavgb(ymm5, ymm13, ymm6);
+	assembler.js(one);
+	assembler.jmp(one);
 
 	assembler.label(one);
-	assembler.vroundss(xmm2, xmm13, xmm5, 0x96);
-	assembler.vcvttps2dq(xmm2, xmm2);
-	assembler.dec(bl);
-	assembler.vpaddsb(ymm12, ymm4, ymm10);
-	assembler.test(dl, r12b);
-	assembler.addsubps(xmm2, xmm5);
-	assembler.vpermilps(xmm8, xmm14, xmm5);
-	assembler.extrq(xmm10, 0xB8, 0x6A);
-	assembler.vcvtpd2dq(xmm14, xmm8);
-	assembler.sbb(r12w, 0x54);
-	assembler.vmovaps(xmm7, xmm4);
-	assembler.vmaxps(xmm2, xmm14, xmm14);
-	assembler.pand(mm0, mm6);
-	assembler.movsx(r11, bp);
-	assembler.vfnmadd213pd(ymm7, ymm7, ymm7);
-	assembler.pcmpgtq(xmm3, xmm11);
-	assembler.pblendw(xmm10, xmm7, 0xAE);
-	assembler.je(one);
-		assembler.jnb(TestCase.TEST_CASE_FINISH.address());
+	assembler.vpsrlq(xmm5, xmm9, 0x36);
+	assembler.xgetbv();
+	assembler.psignw(xmm1, xmm10);
+	assembler.js(one);
+		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
 
 		var buf = seg.asByteBuffer();
 		assembler.assemble(buf::put, 0);
@@ -112,89 +61,40 @@ public class Triage {
 		var assembler = new CodeAssembler(64);
 
 		/**
-		 * 0:
-		 * btc cx,cx
-		 * mulsd xmm12,xmm10
-		 * blendps xmm8,xmm9,90h
-		 * sets dil
-		 * paddq xmm5,xmm2
-		 * vpunpckhwd ymm13,ymm14,ymm14
-		 * pinsrw mm2,rdx,94h
-		 * packssdw mm5,mm1
-		 * vphaddd xmm7,xmm11,xmm0
-		 * crc32 r8d,r12d
-		 * setle ch
-		 * psrld mm6,0B9h
-		 * vfnmsub231ps xmm2,xmm14,xmm14
-		 * sha1rnds4 xmm13,xmm5,40h
-		 * xgetbv
-		 * vpextrq r9,xmm14,0DBh
-		 * jnb 2
-		 * jmp 1
-		 *
-		 * 1:
-		 * dec bl
-		 * vpaddsb ymm12,ymm4,ymm10
-		 * vroundss xmm2,xmm13,xmm5,96h
-		 * vcvttps2dq xmm2,xmm2
-		 * test dl,r12b
-		 * extrq xmm10,0B8h,6Ah
-		 * addsubps xmm2,xmm5
-		 * vpermilps xmm8,xmm14,xmm5
-		 * vcvtpd2dq xmm14,xmm8
-		 * sbb r12w,54h
-		 * vmaxps xmm2,xmm14,xmm14
-		 * vmovaps xmm7,xmm4
-		 * vfnmadd213pd ymm7,ymm7,ymm7
-		 * pcmpgtq xmm3,xmm11
-		 * pand mm0,mm6
-		 * movsx r11,bp
-		 * pblendw xmm10,xmm7,0AEh
-		 * je 1
-		 * jmp 1
+		 0:
+		 sub ax,0B98Fh
+		 rcl cx,1
+		 pmovsxwq xmm5,xmm6
+		 vpavgb ymm5,ymm13,ymm6
+		 js 1
+		 jmp 1
+
+		 1:
+		 xgetbv
+		 vpsrlq xmm5,xmm9,36h
+		 psignw xmm1,xmm10
+		 js 1
+		 jmp 2
+
+
 		 */
 		var zero = assembler.createLabel();
 		var one = assembler.createLabel();
 
 		assembler.label(zero);
-		assembler.btc(cx, cx);
-		assembler.mulsd(xmm12, xmm10);
-		assembler.blendps(xmm8, xmm9, 0x90);
-		assembler.sets(dil);
-		assembler.paddq(xmm5, xmm2);
-		assembler.vpunpckhwd(ymm13, ymm14, ymm14);
-		assembler.pinsrw(mm2, rdx, 0x94);
-		assembler.packssdw(mm5, mm1);
-		assembler.vphaddd(xmm7, xmm11, xmm0);
-		assembler.crc32(r8d, r12d);
-		assembler.setle(ch);
-		assembler.psrld(mm6, 0xB9);
-		assembler.vfnmsub231ps(xmm2, xmm14, xmm14);
-		assembler.sha1rnds4(xmm13, xmm5, 0x40);
-		assembler.xgetbv();
-		assembler.vpextrq(r9, xmm14, 0xDB);
-		assembler.jnb(one);
+		assembler.sub(ax, 0xB98F);
+		assembler.rcl(cx, 1);
+		assembler.pmovsxwq(xmm5, xmm6);
+		assembler.vpavgb(ymm5, ymm13, ymm6);
+		assembler.js(one);
+		assembler.jmp(one);
 
 		assembler.label(one);
-		assembler.dec(bl);
-		assembler.vpaddsb(ymm12, ymm4, ymm10);
-		assembler.vroundss(xmm2, xmm13, xmm5, 0x96);
-		assembler.vcvttps2dq(xmm2, xmm2);
-		assembler.test(dl, r12b);
-		assembler.extrq(xmm10, 0xB8, 0x6A);
-		assembler.addsubps(xmm2, xmm5);
-		assembler.vpermilps(xmm8, xmm14, xmm5);
-		assembler.vcvtpd2dq(xmm14, xmm8);
-		assembler.sbb(r12w, 0x54);
-		assembler.vmaxps(xmm2, xmm14, xmm14);
-		assembler.vmovaps(xmm7, xmm4);
-		assembler.vfnmadd213pd(ymm7, ymm7, ymm7);
-		assembler.pcmpgtq(xmm3, xmm11);
-		assembler.pand(mm0, mm6);
-		assembler.movsx(r11, bp);
-		assembler.pblendw(xmm10, xmm7, 0xAE);
-		assembler.je(one);
-		assembler.jnb(TestCase.TEST_CASE_FINISH.address());
+		assembler.xgetbv();
+		assembler.vpsrlq(xmm5, xmm9, 0x36);
+		assembler.psignw(xmm1, xmm10);
+		assembler.js(one);
+		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
 
 
 		var buf = seg.asByteBuffer();
