@@ -10,8 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static com.github.icedland.iced.x86.Register.FS;
-import static com.github.icedland.iced.x86.Register.GS;
+import static com.github.icedland.iced.x86.Register.*;
 
 
 public class Registers {
@@ -41,6 +40,7 @@ public class Registers {
 		r.put("MSRS", MSRS);
 		r.put("FSBASE", FS);
 		r.put("GSBASE", GS);
+		r.put("IP", EIP); // TODO: wrong
 
 		registers = Collections.unmodifiableMap(r);
 		registerNames = new String[registers.size()];

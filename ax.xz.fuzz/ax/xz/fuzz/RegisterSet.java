@@ -57,6 +57,10 @@ public final class RegisterSet {
 		return new RegisterSet(Arrays.stream(registers).collect(BitSet::new, BitSet::set, BitSet::or));
 	}
 
+	public static RegisterSet ofRange(int startInclusive, int endInclusive) {
+		return new RegisterSet(rangeClosed(startInclusive, endInclusive).collect(BitSet::new, BitSet::set, BitSet::or));
+	}
+
 	public static RegisterSet generalPurpose(int size) {
 		return switch (size) {
 			case 8 -> GPB;
@@ -85,6 +89,7 @@ public final class RegisterSet {
 	}
 
 	private final BitSet registers;
+	private int[] registersOn;
 
 	public RegisterSet(BitSet registers) {
 		this.registers = registers;
@@ -95,10 +100,11 @@ public final class RegisterSet {
 	}
 
 	public RegisterSet intersection(RegisterSet other) {
-		var newSet = copyOf();
-		newSet.registers.and(other.registers);
+		var bs = new BitSet();
+		bs.or(registers);
+		bs.and(other.registers);
 
-		return newSet;
+		return new RegisterSet(bs);
 	}
 
 	public RegisterSet union(RegisterSet other) {
@@ -109,7 +115,10 @@ public final class RegisterSet {
 	}
 
 	private RegisterSet copyOf() {
-		return new RegisterSet((BitSet) registers.clone());
+		var bs = new BitSet();
+		bs.or(registers);
+
+		return new RegisterSet(bs);
 	}
 
 	public boolean isEmpty() {
@@ -120,8 +129,10 @@ public final class RegisterSet {
 		if (isEmpty())
 			throw new IllegalStateException("Cannot choose from empty register set");
 
-		int index = randomGenerator.nextInt(registers.cardinality());
-		return registers.stream().skip(index).findFirst().orElseThrow();
+		if (registersOn == null)
+			this.registersOn = registers.stream().toArray();
+
+		return registersOn[randomGenerator.nextInt(registersOn.length)];
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {

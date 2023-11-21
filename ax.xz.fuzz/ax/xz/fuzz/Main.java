@@ -11,10 +11,9 @@ import static com.github.icedland.iced.x86.Register.R15;
 import static java.time.Instant.now;
 
 public class Main {
-	private static final int NUM_BLOCKS = 5;
+	private static final int NUM_BLOCKS = 2;
 
-
-	public static void main(String[] args) throws BlockGenerator.NoPossibilitiesException, BasicBlock.UnencodeableException {
+	public static void main(String[] args) throws BlockGenerator.NoPossibilitiesException {
 		try (var arena = Arena.ofConfined()) {
 			var scratch1 = mmap(MemorySegment.NULL, 4096, PROT_READ() | PROT_WRITE() | PROT_EXEC(),
 					MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0)
@@ -33,7 +32,7 @@ public class Main {
 			if (code.address() == MAP_FAILED().address())
 				throw new RuntimeException("mmap failed");
 
-			var rng = new Random(1);
+			var rng = new Random(11);
 
 			var partitions = ResourcePartition.partitioned(true, rng, scratch1, scratch2);
 
@@ -92,8 +91,9 @@ public class Main {
 
 					if (previousResult != null &&
 						(
-								(previousResult instanceof ExecutionResult.Fault) != (result instanceof ExecutionResult.Fault)
-								|| (previousResult instanceof ExecutionResult.Success && !previousResult.equals(result))
+//								((previousResult instanceof ExecutionResult.Fault) != (result instanceof ExecutionResult.Fault))
+								 (previousResult instanceof ExecutionResult.Success && result instanceof ExecutionResult.Success &&
+					!previousResult.equals(result))
 						)
 					) {
 						System.err.println("Found inconsistent behaviour");

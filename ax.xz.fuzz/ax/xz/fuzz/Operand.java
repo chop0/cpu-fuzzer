@@ -8,7 +8,7 @@ import java.util.random.RandomGenerator;
 
 import static com.github.icedland.iced.x86.Register.NONE;
 
-sealed interface Operand {
+public sealed interface Operand {
 	boolean fulfilledBy(ResourcePartition partition);
 
 	sealed interface ExplicitOperand extends Operand {
@@ -325,6 +325,13 @@ sealed interface Operand {
 			@Override
 			public boolean fulfilledBy(ResourcePartition partition) {
 				return partition.allowedRegisters().hasRegister(register);
+			}
+		}
+
+		record Mem() implements SuppressedOperand {
+			@Override
+			public boolean fulfilledBy(ResourcePartition partition) {
+				return false; // disable these for now (TODO)
 			}
 		}
 	}

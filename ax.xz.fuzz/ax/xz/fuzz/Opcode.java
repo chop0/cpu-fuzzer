@@ -4,6 +4,7 @@ import ax.xz.fuzz.parse.OperandLexer;
 import ax.xz.fuzz.parse.OperandParser;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
+import com.github.icedland.iced.x86.Register;
 import com.github.icedland.iced.x86.enc.Encoder;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -114,8 +115,15 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 				case Operand.SuppressedOperand _ -> {
 				}
 			}
-
 		}
+
+//		if ( randomGenerator.nextBoolean()) {
+//			switch (randomGenerator.nextInt(3)) {
+//				case 0 -> insn.setRepnePrefix(true);
+//				case 1 -> insn.setRepePrefix(true);
+//				case 2 -> insn.setRepPrefix(true);
+//			}
+//		}
 
 		return insn;
 	}

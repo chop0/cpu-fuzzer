@@ -1,6 +1,7 @@
 package ax.xz.fuzz;
 
 import com.github.icedland.iced.x86.Code;
+import com.github.icedland.iced.x86.EncodingKind;
 import com.github.icedland.iced.x86.FlowControl;
 import com.github.icedland.iced.x86.Instruction;
 

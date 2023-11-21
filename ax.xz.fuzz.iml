@@ -10,6 +10,9 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="iced-x86-1.20.0" level="project" />
     <orderEntry type="library" name="antlr-4.13.1-complete" level="project" />
+    <orderEntry type="library" name="jackson-core-2.16.0-rc1" level="project" />
+    <orderEntry type="library" name="jackson-databind-2.16.0-rc1" level="project" />
+    <orderEntry type="library" name="jackson-annotations-2.16.0-rc1" level="project" />
   </component>
   <component name="SonarLintModuleSettings">
     <option name="uniqueId" value="574ed939-13f9-4234-b3b4-f9c5917c8bf8" />

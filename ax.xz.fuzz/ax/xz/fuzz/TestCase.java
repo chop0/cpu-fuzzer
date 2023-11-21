@@ -1,13 +1,17 @@
 package ax.xz.fuzz;
 
+import com.github.icedland.iced.x86.Code;
 import com.github.icedland.iced.x86.CodeWriter;
 import com.github.icedland.iced.x86.ICRegister;
+import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.asm.AsmRegister64;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
+import com.github.icedland.iced.x86.asm.CodeAssemblerResult;
 import com.github.icedland.iced.x86.asm.CodeLabel;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
+import java.nio.ByteBuffer;
 import java.util.function.BiConsumer;
 import java.util.random.RandomGenerator;
 
@@ -23,7 +27,19 @@ public record TestCase(InterleavedBlock[] blocks, Branch[] branches) {
 			throw new IllegalArgumentException("blocks must not be empty");
 	}
 
+	private byte[] encode(Instruction instruction) {
+		byte[] result = new byte[15];
+		var buf = ByteBuffer.wrap(result);
+		var ca = new CodeAssembler(64);
+		ca.addInstruction(instruction);
+		ca.assemble(buf::put, 0);
+		var trimmed = new byte[buf.position()];
+		System.arraycopy(result, 0, trimmed, 0, trimmed.length);
+		return trimmed;
+	}
+
 	public void encode(long rip, CodeWriter cw, int counterRegister, int counterBound) {
+		var rd = new RexDuplicator();
 		var assembler = new CodeAssembler(64);
 
 		var counter = new AsmRegister64(new ICRegister(counterRegister));
@@ -34,9 +50,12 @@ public record TestCase(InterleavedBlock[] blocks, Branch[] branches) {
 		var exit = assembler.createLabel("exit");
 
 		CodeLabel[] blockHeaders = new CodeLabel[blocks.length + 1];
+		CodeLabel[] testCaseLocs = new CodeLabel[blocks.length];
 		for (int i = 0; i < blockHeaders.length - 1; i++) {
 			blockHeaders[i] = assembler.createLabel();
+			testCaseLocs[i] = assembler.createLabel();
 		}
+
 		blockHeaders[blockHeaders.length - 1] = exit;
 
 		for (int i = 0; i < blocks.length; i++) {
@@ -47,7 +66,8 @@ public record TestCase(InterleavedBlock[] blocks, Branch[] branches) {
 			assembler.inc(counter);
 
 			for (var insn : blocks[i].instructions()) {
-				assembler.addInstruction(insn);
+				var encoded = encode(insn);
+				assembler.db(encoded);
 			}
 
 			branches[i].type.perform.accept(assembler, blockHeaders[branches[i].takenIndex]);
@@ -57,7 +77,7 @@ public record TestCase(InterleavedBlock[] blocks, Branch[] branches) {
 		assembler.label(exit);
 		assembler.jmp(TEST_CASE_FINISH.address());
 
-		var result = assembler.assemble(cw, rip);
+		var result = (CodeAssemblerResult)assembler.assemble(cw, rip);
 	}
 
 	record Branch(BranchType type, int takenIndex, int notTakenIndex) {

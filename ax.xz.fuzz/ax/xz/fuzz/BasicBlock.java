@@ -101,7 +101,19 @@ public class BasicBlock {
 	@Override
 	public String toString() {
 		return Arrays.stream(instructions)
-				.map(Instruction::toString)
+				.map(n -> {
+					var res = "";
+					if (n.getRepPrefix())
+						res += "rep ";
+					if (n.getRepnePrefix())
+						res += "repne ";
+					if (n.getLockPrefix())
+						res += "lock ";
+					if (n.getRepePrefix())
+						res += "repe ";
+					res += n.toString();
+					return res;
+				})
 				.reduce((a, b) -> a + "\n" + b)
 				.orElse("");
 	}
