@@ -31,22 +31,13 @@ public class Triage {
  js 1
  jmp 2
  */
-	var zero = assembler.createLabel();
-	var one = assembler.createLabel();
-
-	assembler.label(zero);
 	assembler.sub(ax, 0xB98F);
 	assembler.rcl(cx, 1);
-	assembler.pmovsxwq(xmm5, xmm6);
-	assembler.vpavgb(ymm5, ymm13, ymm6);
-	assembler.js(one);
-	assembler.jmp(one);
+	assembler.pmovsxwq(xmm7, xmm10);
 
-	assembler.label(one);
 	assembler.vpsrlq(xmm5, xmm9, 0x36);
 	assembler.xgetbv();
-	assembler.psignw(xmm1, xmm10);
-	assembler.js(one);
+
 		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
 
 		var buf = seg.asByteBuffer();
@@ -78,22 +69,12 @@ public class Triage {
 
 
 		 */
-		var zero = assembler.createLabel();
-		var one = assembler.createLabel();
-
-		assembler.label(zero);
 		assembler.sub(ax, 0xB98F);
 		assembler.rcl(cx, 1);
-		assembler.pmovsxwq(xmm5, xmm6);
-		assembler.vpavgb(ymm5, ymm13, ymm6);
-		assembler.js(one);
-		assembler.jmp(one);
+		assembler.pmovsxwq(xmm7, xmm10);
 
-		assembler.label(one);
 		assembler.xgetbv();
 		assembler.vpsrlq(xmm5, xmm9, 0x36);
-		assembler.psignw(xmm1, xmm10);
-		assembler.js(one);
 		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
 
 
