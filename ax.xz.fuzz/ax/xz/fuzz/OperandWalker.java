@@ -30,7 +30,7 @@ public class OperandWalker extends OperandBaseListener {
 	public void enterImm(OperandParser.ImmContext ctx) {
 		var width = parseInt(ctx.DIGITS().getText());
 		operand = new Imm(width, switch (width) {
-			case 4,8 -> OpKind.IMMEDIATE8;
+			case 4, 8 -> OpKind.IMMEDIATE8;
 			case 16 -> OpKind.IMMEDIATE16;
 			case 32 -> OpKind.IMMEDIATE32;
 			case 64 -> OpKind.IMMEDIATE64;
@@ -102,7 +102,7 @@ public class OperandWalker extends OperandBaseListener {
 				operand = (new RegOrMem(bank, memorySize));
 			else
 				operand = (new RegOrMemBroadcastable(bank, memorySize, parseInt(ctx.BROADCAST_SIZE().getText().substring(1))));
-		}  else {
+		} else {
 			operand = (new Reg(bank));
 		}
 	}

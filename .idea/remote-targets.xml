@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteTargetsManager">
+    <targets>
+      <target name="alec@xz.ax:22" type="ssh/sftp" uuid="ecb7646b-371b-40ed-887e-45e69511a032">
+        <config>
+          <option name="projectRootOnTarget" value="/home/alec/cpu-fuzzer" />
+          <option name="serverName" value="alec@xz.ax:22 agent" />
+          <option name="useRsync" value="true" />
+        </config>
+        <ContributedStateBase type="JavaLanguageRuntime">
+          <config>
+            <option name="homePath" value="/usr/lib/jvm/jdk-22" />
+            <option name="javaVersionString" value="22" />
+          </config>
+        </ContributedStateBase>
+      </target>
+      <target name="apetri@unicorn:22" type="ssh/sftp" uuid="8b212ebe-62cf-42d0-a97a-4e5a3fdc5603">
+        <config>
+          <option name="projectRootOnTarget" value="/afs/csail.mit.edu/u/a/apetri/cpu-fuzzer" />
+          <option name="serverName" value="apetri@unicorn:22 password" />
+          <option name="useRsync" value="true" />
+        </config>
+        <ContributedStateBase type="JavaLanguageRuntime">
+          <config>
+            <option name="homePath" value="/afs/csail.mit.edu/u/a/apetri/usr/lib/jvm/jdk-22.0.1" />
+            <option name="javaVersionString" value="22.0.1" />
+          </config>
+        </ContributedStateBase>
+      </target>
+    </targets>
+  </component>
+</project>

@@ -23,17 +23,17 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 	public static CPUState ofSavedState(MemorySegment savedState) {
 		return new CPUState(
 				GeneralPurposeRegisters.ofSavedState(savedState),
-				VectorRegisters.ofArray(saved_state.zmm$slice(savedState)),
-				MMXRegisters.ofArray(saved_state.mm$slice(savedState)),
-				saved_state.rflags$get(savedState)
+				VectorRegisters.ofArray(saved_state.zmm(savedState)),
+				MMXRegisters.ofArray(saved_state.mm(savedState)),
+				saved_state.rflags(savedState)
 		);
 	}
 
 	public void toSavedState(MemorySegment savedState) {
 		gprs.toSavedState(savedState);
-		zmm.toArray(saved_state.zmm$slice(savedState));
-		mmx.toArray(saved_state.mm$slice(savedState));
-		saved_state.rflags$set(savedState, rflags);
+		zmm.toArray(saved_state.zmm(savedState));
+		mmx.toArray(saved_state.mm(savedState));
+		saved_state.rflags(savedState, rflags);
 	}
 
 	public static CPUState filledWith(long thing) {
@@ -54,42 +54,42 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 
 		static GeneralPurposeRegisters ofSavedState(MemorySegment savedState) {
 			return new GeneralPurposeRegisters(
-					saved_state.rax$get(savedState),
-					saved_state.rbx$get(savedState),
-					saved_state.rcx$get(savedState),
-					saved_state.rdx$get(savedState),
-					saved_state.rsi$get(savedState),
-					saved_state.rdi$get(savedState),
-					saved_state.rbp$get(savedState),
-					saved_state.r8$get(savedState),
-					saved_state.r9$get(savedState),
-					saved_state.r10$get(savedState),
-					saved_state.r11$get(savedState),
-					saved_state.r12$get(savedState),
-					saved_state.r13$get(savedState),
-					saved_state.r14$get(savedState),
-					saved_state.r15$get(savedState),
-					saved_state.rsp$get(savedState)
+					saved_state.rax(savedState),
+					saved_state.rbx(savedState),
+					saved_state.rcx(savedState),
+					saved_state.rdx(savedState),
+					saved_state.rsi(savedState),
+					saved_state.rdi(savedState),
+					saved_state.rbp(savedState),
+					saved_state.r8(savedState),
+					saved_state.r9(savedState),
+					saved_state.r10(savedState),
+					saved_state.r11(savedState),
+					saved_state.r12(savedState),
+					saved_state.r13(savedState),
+					saved_state.r14(savedState),
+					saved_state.r15(savedState),
+					saved_state.rsp(savedState)
 			);
 		}
 
 		void toSavedState(MemorySegment savedState) {
-			saved_state.rax$set(savedState, rax);
-			saved_state.rbx$set(savedState, rbx);
-			saved_state.rcx$set(savedState, rcx);
-			saved_state.rdx$set(savedState, rdx);
-			saved_state.rsi$set(savedState, rsi);
-			saved_state.rdi$set(savedState, rdi);
-			saved_state.rbp$set(savedState, rsp);
-			saved_state.r8$set(savedState, r8);
-			saved_state.r9$set(savedState, r9);
-			saved_state.r10$set(savedState, r10);
-			saved_state.r11$set(savedState, r11);
-			saved_state.r12$set(savedState, r12);
-			saved_state.r13$set(savedState, r13);
-			saved_state.r14$set(savedState, r14);
-			saved_state.r15$set(savedState, r15);
-			saved_state.rsp$set(savedState, rsp);
+			saved_state.rax(savedState, rax);
+			saved_state.rbx(savedState, rbx);
+			saved_state.rcx(savedState, rcx);
+			saved_state.rdx(savedState, rdx);
+			saved_state.rsi(savedState, rsi);
+			saved_state.rdi(savedState, rdi);
+			saved_state.rbp(savedState, rsp);
+			saved_state.r8(savedState, r8);
+			saved_state.r9(savedState, r9);
+			saved_state.r10(savedState, r10);
+			saved_state.r11(savedState, r11);
+			saved_state.r12(savedState, r12);
+			saved_state.r13(savedState, r13);
+			saved_state.r14(savedState, r14);
+			saved_state.r15(savedState, r15);
+			saved_state.rsp(savedState, rsp);
 		}
 	}
 

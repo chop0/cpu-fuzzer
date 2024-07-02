@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <sys/mman.h>
 #include <setjmp.h>
+// perror
+#include <stdio.h>
 
 #include <signal.h>
 

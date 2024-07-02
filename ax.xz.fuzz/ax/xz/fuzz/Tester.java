@@ -24,7 +24,7 @@ public class Tester {
 			int[] locations = BasicBlock.encode(code, opcodes, instructions);
 
 			var output = execution_result.allocate(arena);
-			startState.toSavedState(execution_result.state$slice(output));
+			startState.toSavedState(execution_result.state(output));
 			do_test(code, locations.length, output);
 
 			return ExecutionResult.ofStruct(output);
@@ -35,7 +35,7 @@ public class Tester {
 		try (var arena = Arena.ofConfined()) {
 
 			var output = execution_result.allocate(arena);
-			startState.toSavedState(execution_result.state$slice(output));
+			startState.toSavedState(execution_result.state(output));
 			do_test(code, code.byteSize(), output);
 
 			return ExecutionResult.ofStruct(output);

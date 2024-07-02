@@ -17,27 +17,28 @@ public class Triage {
 
 /**
  0:
- sub ax,0B98Fh
- rcl cx,1
- pmovsxwq xmm5,xmm6
- vpavgb ymm5,ymm13,ymm6
- js 1
- jmp 1
+ not sp
+ cvtpi2pd xmm2,mm4
+ jno 0
+ jmp 0
 
- 1:
- vpsrlq xmm5,xmm9,36h
- xgetbv
- psignw xmm1,xmm10
- js 1
- jmp 2
  */
 
 	assembler.mov(rcx, 1);
-	assembler.pmovsxwq(xmm0, xmm0);
-	assembler.vpsrlq(xmm0, xmm0, 0x36);
-	assembler.xgetbv();
 
+	var block0 = assembler.createLabel("0");
+	assembler.label(block0);
+	assembler.vpabsd(ymm9, ymm8);
+	assembler.orpd(xmm4, xmm1);
+	assembler.jnp(TestCase.TEST_CASE_FINISH.address());
 		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
+
+		var block1 = assembler.createLabel("1");
+		assembler.label(block1);
+		assembler.vfnmadd231ss(xmm13, xmm11, xmm12);
+		assembler.vmovdqa(xmm14, xmm1);
+		assembler.jl(block1);
+		assembler.jmp(block0);
 
 		var buf = seg.asByteBuffer();
 		assembler.assemble(buf::put, 0);
@@ -52,28 +53,36 @@ public class Triage {
 
 		/**
 		 0:
-		 sub ax,0B98Fh
-		 rcl cx,1
-		 pmovsxwq xmm5,xmm6
-		 vpavgb ymm5,ymm13,ymm6
-		 js 1
-		 jmp 1
+		 vpabsd ymm9,ymm8
+		 orpd xmm4,xmm1
+		 jnp 2
+		 jmp 2
 
 		 1:
-		 xgetbv
-		 vpsrlq xmm5,xmm9,36h
-		 psignw xmm1,xmm10
-		 js 1
-		 jmp 2
+		 vmovdqa xmm14,xmm1
+		 vfnmadd231ss xmm13,xmm11,xmm12
+		 jl 1
+		 jmp 0
+
 
 
 		 */
 		assembler.mov(rcx, 1);
-		assembler.pmovsxwq(xmm0, xmm0);
 
-		assembler.xgetbv();
-		assembler.vpsrlq(xmm0, xmm0, 0x36);
+		var block0 = assembler.createLabel("0");
+		assembler.label(block0);
+		assembler.vpabsd(ymm9, ymm8);
+		assembler.orpd(xmm4, xmm1);
+		assembler.jnp(TestCase.TEST_CASE_FINISH.address());
 		assembler.jmp(TestCase.TEST_CASE_FINISH.address());
+
+		var block1 = assembler.createLabel("1");
+		assembler.label(block1);
+		assembler.vmovdqa(xmm14, xmm1);
+		assembler.vfnmadd231ss(xmm13, xmm11, xmm12);
+		assembler.jl(block1);
+		assembler.jmp(block0);
+
 
 
 		var buf = seg.asByteBuffer();

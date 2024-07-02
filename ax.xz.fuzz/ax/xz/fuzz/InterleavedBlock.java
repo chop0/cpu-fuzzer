@@ -1,16 +1,23 @@
 package ax.xz.fuzz;
 
+import ax.xz.fuzz.mutate.DeferredMutation;
 import com.github.icedland.iced.x86.Instruction;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
+import java.util.List;
 
 public class InterleavedBlock extends BasicBlock {
 	private final int[] lhsIndices, rhsIndices;
+	private final ResourcePartition[]  partitions;
 
-	public InterleavedBlock(Opcode[] opcodes, Instruction[] instructions, int[] lhsIndices, int[] rhsIndices) {
-		super(opcodes, instructions);
+	public InterleavedBlock(Opcode[] opcodes, ResourcePartition[] partitions, Instruction[] instructions, DeferredMutation[][] mutations, int[] lhsIndices, int[] rhsIndices) {
+		super(opcodes, instructions, mutations);
 		this.lhsIndices = lhsIndices;
 		this.rhsIndices = rhsIndices;
+
+		this.partitions = partitions;
 	}
 
 	public int[] lhsIndices() {
@@ -21,23 +28,38 @@ public class InterleavedBlock extends BasicBlock {
 		return rhsIndices;
 	}
 
+	public ResourcePartition partitionOf(int index) {
+		return partitions[index];
+	}
+
 	@Override
 	public InterleavedBlock without(int instructionIndex) {
-		var lhsIndices = new int[this.lhsIndices.length - 1];
-		var rhsIndices = new int[this.rhsIndices.length - 1];
+		boolean isInRhs = Arrays.stream(rhsIndices).anyMatch(n -> n == instructionIndex);
+
+		var lhsIndices = new int[isInRhs ? this.lhsIndices.length : this.lhsIndices.length - 1];
+		var rhsIndices = new int[isInRhs ? this.rhsIndices.length - 1 : this.rhsIndices.length];
 
 		var opcodes = new Opcode[opcodes().length - 1];
+		var partitions = new ResourcePartition[opcodes().length - 1];
+		var mutations = new DeferredMutation[opcodes().length - 1][];
 		var instructions = new Instruction[instructions().length - 1];
 
 		int overallIndex = 0, lhsIndex = 0, rhsIndex = 0;
 
-		for (int i = 0; i < lhsIndices.length + rhsIndices.length; i++) {
+		for (int i = 0; i < this.lhsIndices.length + this.rhsIndices.length; i++) {
 			if (i == instructionIndex) {
 				continue;
 			}
 
 			opcodes[overallIndex] = opcodes()[i];
+			partitions[overallIndex] = this.partitions[i];
+			mutations[overallIndex] = this.mutations()[i];
 			instructions[overallIndex] = instructions()[i];
+
+			if (instructions()[i] == null) {
+				throw new NullPointerException("Instruction is null");
+			}
+
 			overallIndex++;
 
 			int finalI = i;
@@ -48,6 +70,10 @@ public class InterleavedBlock extends BasicBlock {
 			}
 		}
 
-		return new InterleavedBlock(opcodes, instructions, lhsIndices, rhsIndices);
+		if (overallIndex != opcodes.length) {
+			throw new IllegalStateException("Index mismatch");
+		}
+
+		return new InterleavedBlock(opcodes, partitions, instructions, mutations, lhsIndices, rhsIndices);
 	}
 }

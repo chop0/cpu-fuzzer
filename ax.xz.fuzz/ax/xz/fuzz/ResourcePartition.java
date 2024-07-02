@@ -1,5 +1,7 @@
 package ax.xz.fuzz;
 
+import com.github.icedland.iced.x86.Register;
+
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -23,6 +25,7 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 		var lhsRegisters = new BitSet();
 		var rhsRegisters = new BitSet();
 
+		var topLevelVector = evex ? RegisterSet.ZMM_EVEX : RegisterSet.ZMM_VEX;
 		var universe = evex ? RegisterSet.ALL_EVEX : RegisterSet.ALL_VEX;
 		for (int[] bank : RegisterSet.banks) {
 			var dst = rng.nextBoolean() ? lhsRegisters : rhsRegisters;

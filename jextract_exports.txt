@@ -1,3 +1,4 @@
+--include-function perror
 --include-struct saved_state
 --include-struct execution_result
 --include-struct do_test
@@ -28,3 +29,5 @@
 --include-constant MAP_PRIVATE
 --include-constant MAP_ANONYMOUS
 --include-constant MAP_FAILED
+--include-struct __jmp_buf_tag
+--include-typedef __sigset_t

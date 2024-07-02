@@ -1,4 +1,4 @@
-.data
+.bss
 saved_rsp:
     .quad 0
 addr:

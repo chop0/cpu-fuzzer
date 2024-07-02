@@ -1,5 +1,6 @@
 package ax.xz.fuzz;
 
+import ax.xz.fuzz.mutate.DeferredMutation;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.enc.Encoder;
 import com.github.icedland.iced.x86.enc.EncoderException;
@@ -25,17 +26,19 @@ public class BasicBlock {
 				.putLong(TestCase.TEST_CASE_FINISH.address());
 	}
 
+	private final DeferredMutation[][] mutations;
 	private final Opcode[] opcodes;
 	private final Instruction[] instructions;
 
-	public BasicBlock(Opcode[] opcodes, Instruction[] instructions) {
+	public BasicBlock(Opcode[] opcodes, Instruction[] instructions, DeferredMutation[][] mutations) {
 		if (opcodes.length != instructions.length)
 			throw new IllegalArgumentException("opcodes.length != instructions.length");
 		this.opcodes = opcodes;
 		this.instructions = instructions;
+		this.mutations = mutations;
 	}
 
-	static InterleavedBlock randomlyInterleaved(RandomGenerator rng, BasicBlock lhs, BasicBlock rhs) {
+	static InterleavedBlock randomlyInterleaved(RandomGenerator rng, ResourcePartition partitionLhs, ResourcePartition partitionRhs, BasicBlock lhs, BasicBlock rhs) {
 		var picks = new BitSet(lhs.size() + rhs.size());
 
 		{
@@ -51,22 +54,26 @@ public class BasicBlock {
 			}
 		}
 
-		var bb = new BasicBlock(pick(picks, lhs.opcodes(), rhs.opcodes()), pick(picks, lhs.instructions(), rhs.instructions()));
+		var bb = new BasicBlock(pick(picks, lhs.opcodes(), rhs.opcodes()), pick(picks, lhs.instructions(), rhs.instructions()), pick(picks, lhs.mutations, rhs.mutations));
 
 		int lhsIndex = 0, rhsIndex = 0;
+
+		var partitions = new ResourcePartition[bb.size()];
 
 		var lhsIndices = new int[lhs.size()];
 		var rhsIndices = new int[rhs.size()];
 
 		for (int i = 0; i < bb.size(); i++) {
 			if (picks.get(i)) {
+				partitions[i] = partitionLhs;
 				lhsIndices[lhsIndex++] = i;
 			} else {
+				partitions[i] = partitionRhs;
 				rhsIndices[rhsIndex++] = i;
 			}
 		}
 
-		return new InterleavedBlock(bb.opcodes(), bb.instructions(), lhsIndices, rhsIndices);
+		return new InterleavedBlock(bb.opcodes(), partitions, bb.instructions(), bb.mutations, lhsIndices, rhsIndices);
 	}
 
 	public static int[] encode(MemorySegment code, Opcode[] opcodes, Instruction[] instructions) throws UnencodeableException {
@@ -100,22 +107,31 @@ public class BasicBlock {
 
 	@Override
 	public String toString() {
-		return Arrays.stream(instructions)
-				.map(n -> {
-					var res = "";
-					if (n.getRepPrefix())
-						res += "rep ";
-					if (n.getRepnePrefix())
-						res += "repne ";
-					if (n.getLockPrefix())
-						res += "lock ";
-					if (n.getRepePrefix())
-						res += "repe ";
-					res += n.toString();
-					return res;
-				})
-				.reduce((a, b) -> a + "\n" + b)
-				.orElse("");
+//		return Arrays.stream(instructions)
+//				.map(n -> {
+//					var res = "";
+//					if (n.getRepPrefix())
+//						res += "rep ";
+//					if (n.getRepnePrefix())
+//						res += "repne ";
+//					if (n.getLockPrefix())
+//						res += "lock ";
+//					if (n.getRepePrefix())
+//						res += "repe ";
+//					res += n.toString();
+//					return res;
+//				})
+//				.reduce((a, b) -> a + "\n" + b)
+//				.orElse("");
+		var sb = new StringBuilder();
+		for (int i = 0; i < instructions.length; i++) {
+			for (DeferredMutation deferredMutation : mutations[i]) {
+				sb.append(deferredMutation).append(" ");
+			}
+			sb.append(instructions[i]).append("\n");
+		}
+
+		return sb.toString();
 	}
 
 	public Opcode[] opcodes() {
@@ -129,16 +145,19 @@ public class BasicBlock {
 	public BasicBlock without(int instructionIndex) {
 		var newOpcodes = new Opcode[opcodes.length - 1];
 		var newInstructions = new Instruction[instructions.length - 1];
+		var newMutations = new DeferredMutation[mutations.length - 1][];
 
 		int newOpcodeIndex = 0;
 		for (int i = 0; i < opcodes.length; i++) {
 			if (i == instructionIndex) continue;
 			newOpcodes[newOpcodeIndex] = opcodes[i];
 			newInstructions[newOpcodeIndex] = instructions[i];
+			newMutations[newOpcodeIndex] = mutations[i];
 			newOpcodeIndex++;
 		}
 
-		return new BasicBlock(newOpcodes, newInstructions);
+
+		return new BasicBlock(newOpcodes, newInstructions, mutations);
 	}
 
 	@Override
@@ -173,6 +192,10 @@ public class BasicBlock {
 		}
 
 		return result;
+	}
+
+	public DeferredMutation[][] mutations() {
+		return mutations;
 	}
 
 	public static class UnencodeableException extends Exception {

@@ -9,13 +9,17 @@ import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Objects;
+import java.util.Random;
+import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.tester.slave_h.*;
 import static ax.xz.fuzz.tester.slave_h.do_test;
 import static com.github.icedland.iced.x86.Register.R15;
 
 public class Minimiser {
-	public static void minimise(Runnable reset, InterleavedBlock[] test1, InterleavedBlock[] test2, TestCase.Branch[] branches) throws BasicBlock.UnencodeableException {
+	public static void minimise(int seed, Runnable reset, InterleavedBlock[] test1, InterleavedBlock[] test2, TestCase.Branch[] branches) throws BasicBlock.UnencodeableException {
+		var rng = new Random();
+
 		for (;;) {
 			boolean changed = false;
 
@@ -38,8 +42,10 @@ public class Minimiser {
 					test1Changed[block] = aWithout;
 					test2Changed[block] = bWithout;
 
-					var test1Result = run(new TestCase(test1Changed, branches));
-					var test2Result = run(new TestCase(test2Changed, branches));
+					rng.setSeed(seed);
+					var test1Result = run(rng, new TestCase(test1Changed, branches));
+					rng.setSeed(seed);
+					var test2Result = run(rng, new TestCase(test2Changed, branches));
 
 					if (mismatch(test1Result, test2Result)) {
 						test1[block] = aWithout;
@@ -64,8 +70,10 @@ public class Minimiser {
 					test1Changed[block] = aWithout;
 					test2Changed[block] = bWithout;
 
-					var test1Result = run(new TestCase(test1Changed, branches));
-					var test2Result = run(new TestCase(test2Changed, branches));
+					rng.setSeed(seed);
+					var test1Result = run(rng, new TestCase(test1Changed, branches));
+					rng.setSeed(seed);
+					var test2Result = run(rng, new TestCase(test2Changed, branches));
 
 					if (mismatch(test1Result, test2Result)) {
 						test1[block] = aWithout;
@@ -86,16 +94,16 @@ public class Minimiser {
 		System.out.println(new TestCase(test2, branches));
 	}
 
-	private static ExecutionResult run(TestCase tc) {
+	private static ExecutionResult run(RandomGenerator rng, TestCase tc) {
 		try (var arena = Arena.ofConfined()) {
 			var code = mmap(MemorySegment.NULL, 4096*16L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0)
 					.reinterpret(4096 * 16, arena, ms -> munmap(ms, 4096 * 16L));
 
 			var buf = code.asByteBuffer();
-			 tc.encode(code.address(), buf::put, R15, 100);
+			 tc.encode(rng, code.address(), buf::put, R15, 100);
 
 			var output = execution_result.allocate(arena);
-			CPUState.filledWith(0).toSavedState(execution_result.state$slice(output));
+			CPUState.filledWith(0).toSavedState(execution_result.state(output));
 			do_test(code, buf.position(), output);
 
 			return ExecutionResult.ofStruct(output);

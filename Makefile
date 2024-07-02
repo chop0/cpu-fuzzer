@@ -6,14 +6,14 @@ run: ax.xz.fuzz libslave.so
 
 all: libslave.so ax.xz.fuzz
 
-libslave.so: test_entry_routine.S slave.c slave.h
-	gcc -Wl,-z,relro,-z,now -fPIC -shared -o $@ $^
+libslave.so: test_entry_routine.S slave.c
+	gcc  -Wl,-z,relro,-z,now -fPIC -shared -o $@ $^
 
 ax.xz.fuzz: $(shell find ax.xz.fuzz -name "*.java") parse bindings
-	javac --enable-preview --source 21 -p $(MODULE_PATH) -d out --module ax.xz.fuzz --module-source-path .:gen
+	javac -p $(MODULE_PATH) -d out --module ax.xz.fuzz --module-source-path .:gen
 
 bindings: slave.h jextract_exports.txt
-	jextract -l slave -t ax.xz.fuzz.tester --source slave.h --output gen/ax.xz.fuzz @jextract_exports.txt
+	jextract  -t ax.xz.fuzz.tester slave.h --output gen/ax.xz.fuzz @jextract_exports.txt
 
 parse: Operand.g4
 	java -jar $(ANTLR_JAR) -Dlanguage=Java -o gen/ax.xz.fuzz/ax/xz/fuzz/parse -package ax.xz.fuzz.parse $^

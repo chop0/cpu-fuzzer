@@ -1,7 +1,8 @@
 package ax.xz.fuzz;
 
+import ax.xz.fuzz.mutate.DeferredMutation;
+import ax.xz.fuzz.mutate.MutationFactory;
 import com.github.icedland.iced.x86.Code;
-import com.github.icedland.iced.x86.EncodingKind;
 import com.github.icedland.iced.x86.FlowControl;
 import com.github.icedland.iced.x86.Instruction;
 
@@ -12,7 +13,6 @@ import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.tester.slave_h.*;
 import static com.github.icedland.iced.x86.Code.*;
-import static com.github.icedland.iced.x86.FlowControl.*;
 
 public class BlockGenerator {
 	private static final Set<Integer> blacklistedOpcodes = Set.of(XGETBV, WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
@@ -47,7 +47,7 @@ public class BlockGenerator {
 			return false;
 
 		var insn = Instruction.create(opcode);
-		if (insn.isPrivileged() || insn.isStackInstruction() || insn.getFlowControl() != FlowControl.NEXT)
+		if (insn.isPrivileged() || insn.isStackInstruction() || insn.getFlowControl() != FlowControl.NEXT || insn.isJccShortOrNear())
 			return false;
 
 		if (disallowedPrefixes.stream().anyMatch(name::contains))
@@ -95,21 +95,25 @@ public class BlockGenerator {
 	}
 
 	public BasicBlock createBasicBlock(RandomGenerator rng) throws BlockGenerator.NoPossibilitiesException {
-		var instructions = new Instruction[rng.nextInt(	1, 3)];
+		var mf = new MutationFactory();
+
+		var instructions = new Instruction[rng.nextInt(	1, 10)];
+		var mutations = new DeferredMutation[instructions.length][];
 		var opcodes = new Opcode[instructions.length];
 
 		for (int i = 0; i < instructions.length; i++) {
 			for (;;) {
 				var variant = allOpcodes[rng.nextInt(allOpcodes.length)];
-				if (disabled.contains(variant) || !variant.fulfilledBy(false, resourcePartition)) continue;
+				if (disabled.contains(variant) || !variant.fulfilledBy(true, resourcePartition)) continue;
 
 				instructions[i] = variant.ofRandom(resourcePartition, rng);
+				mutations[i] = mf.createMutations(instructions[i], resourcePartition, rng);
 				opcodes[i] = variant;
 				break;
 			}
 		}
 
-		return new BasicBlock(opcodes, instructions);
+		return new BasicBlock(opcodes, instructions, mutations);
 	}
 
 	public static class NoPossibilitiesException extends Exception {
