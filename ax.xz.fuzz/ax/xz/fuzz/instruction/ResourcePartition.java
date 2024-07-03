@@ -1,6 +1,6 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.instruction;
 
-import com.github.icedland.iced.x86.Register;
+import ax.xz.fuzz.blocks.BlockGenerator;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
@@ -8,8 +8,6 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.random.RandomGenerator;
-
-import static java.lang.foreign.MemoryLayout.sequenceLayout;
 
 public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet allowedRegisters,
 								MemoryPartition[] allowedMemoryRanges) {

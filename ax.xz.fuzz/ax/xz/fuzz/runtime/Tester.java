@@ -1,19 +1,14 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.instruction.Opcode;
+import ax.xz.fuzz.blocks.BasicBlock;
 import ax.xz.fuzz.tester.execution_result;
-import ax.xz.fuzz.tester.slave_h;
 import com.github.icedland.iced.x86.Instruction;
-import com.github.icedland.iced.x86.asm.CodeAssembler;
 
 import java.lang.foreign.*;
-import java.lang.invoke.MethodHandle;
-import java.nio.file.Path;
 
 import static ax.xz.fuzz.tester.slave_h.*;
 import static ax.xz.fuzz.tester.slave_h.munmap;
-import static com.github.icedland.iced.x86.Register.R15;
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 public class Tester {
 	public static ExecutionResult runBlock(CPUState startState, Opcode[] opcodes, Instruction[] instructions) throws BasicBlock.UnencodeableException {

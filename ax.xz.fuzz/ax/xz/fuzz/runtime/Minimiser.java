@@ -1,7 +1,8 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.blocks.BasicBlock;
+import ax.xz.fuzz.blocks.InterleavedBlock;
 import ax.xz.fuzz.tester.execution_result;
-import com.github.icedland.iced.x86.Instruction;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

@@ -1,7 +1,12 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.blocks;
 
+import ax.xz.fuzz.instruction.Opcode;
+import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.mutate.DeferredMutation;
 import ax.xz.fuzz.mutate.MutationFactory;
+import ax.xz.fuzz.runtime.CPUState;
+import ax.xz.fuzz.runtime.ExecutionResult;
+import ax.xz.fuzz.runtime.Tester;
 import com.github.icedland.iced.x86.Code;
 import com.github.icedland.iced.x86.FlowControl;
 import com.github.icedland.iced.x86.Instruction;

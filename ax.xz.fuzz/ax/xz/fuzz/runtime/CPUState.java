@@ -1,8 +1,7 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.tester.saved_state;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.math.BigInteger;
@@ -13,7 +12,6 @@ import java.util.stream.StreamSupport;
 
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
-import static java.util.stream.Stream.concat;
 
 // TODO: include segment registers
 public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXRegisters mmx, long rflags) {

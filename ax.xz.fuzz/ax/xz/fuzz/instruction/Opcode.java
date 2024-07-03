@@ -1,10 +1,10 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.instruction;
 
+import ax.xz.fuzz.blocks.BlockGenerator;
 import ax.xz.fuzz.parse.OperandLexer;
 import ax.xz.fuzz.parse.OperandParser;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
-import com.github.icedland.iced.x86.Register;
 import com.github.icedland.iced.x86.enc.Encoder;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -97,7 +97,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 		return listener.getOperand();
 	}
 
-	Instruction ofRandom(ResourcePartition resourcePartition, RandomGenerator randomGenerator) throws BlockGenerator.NoPossibilitiesException {
+	public Instruction ofRandom(ResourcePartition resourcePartition, RandomGenerator randomGenerator) throws BlockGenerator.NoPossibilitiesException {
 		var insn = Instruction.create(icedVariant);
 
 		int explicitOpIdx = 0;
@@ -128,7 +128,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 		return insn;
 	}
 
-	boolean fulfilledBy(boolean evex, ResourcePartition rp) {
+	public boolean fulfilledBy(boolean evex, ResourcePartition rp) {
 		return (evex || !prefixes.contains(Prefix.EVEX)) && Arrays.stream(operands).allMatch(n -> n.fulfilledBy(rp));
 	}
 

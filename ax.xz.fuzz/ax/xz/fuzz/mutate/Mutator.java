@@ -1,6 +1,6 @@
 package ax.xz.fuzz.mutate;
 
-import ax.xz.fuzz.ResourcePartition;
+import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
 
 import java.util.random.RandomGenerator;

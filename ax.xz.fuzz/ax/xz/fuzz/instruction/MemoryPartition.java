@@ -1,4 +1,4 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.instruction;
 
 import java.lang.foreign.MemorySegment;
 import java.util.random.RandomGenerator;

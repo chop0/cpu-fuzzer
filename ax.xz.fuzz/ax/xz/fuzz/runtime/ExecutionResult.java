@@ -1,16 +1,12 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.tester.fault_details;
-import ax.xz.fuzz.tester.saved_state;
 
-import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.util.stream.StreamSupport;
 
 import static ax.xz.fuzz.tester.execution_result.*;
 import static ax.xz.fuzz.tester.fault_details.fault_address;
 import static ax.xz.fuzz.tester.fault_details.fault_reason;
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 public sealed interface ExecutionResult {
 	static ExecutionResult ofStruct(MemorySegment struct) {

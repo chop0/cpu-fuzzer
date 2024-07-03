@@ -1,11 +1,11 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.instruction;
 
 import ax.xz.fuzz.parse.OperandBaseListener;
 import ax.xz.fuzz.parse.OperandParser;
 import com.github.icedland.iced.x86.OpKind;
 
-import static ax.xz.fuzz.Operand.Counted.*;
-import static ax.xz.fuzz.Operand.Uncounted.*;
+import static ax.xz.fuzz.instruction.Operand.Counted.*;
+import static ax.xz.fuzz.instruction.Operand.Uncounted.*;
 import static java.lang.Integer.parseInt;
 
 public class OperandWalker extends OperandBaseListener {

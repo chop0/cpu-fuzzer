@@ -1,13 +1,12 @@
 package ax.xz.fuzz.encoding;
 
-import ax.xz.fuzz.BlockGenerator;
-import ax.xz.fuzz.RegisterSet;
-import ax.xz.fuzz.ResourcePartition;
-import ax.xz.fuzz.StatusFlag;
+import ax.xz.fuzz.blocks.BlockGenerator;
+import ax.xz.fuzz.instruction.RegisterSet;
+import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.instruction.StatusFlag;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 
-import java.util.ArrayList;
 import java.util.random.RandomGenerator;
 
 import static com.github.icedland.iced.x86.Register.NONE;

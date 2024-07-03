@@ -1,5 +1,8 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.blocks;
 
+import ax.xz.fuzz.instruction.Opcode;
+import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.runtime.TestCase;
 import ax.xz.fuzz.mutate.DeferredMutation;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.enc.Encoder;
@@ -38,7 +41,7 @@ public class BasicBlock {
 		this.mutations = mutations;
 	}
 
-	static InterleavedBlock randomlyInterleaved(RandomGenerator rng, ResourcePartition partitionLhs, ResourcePartition partitionRhs, BasicBlock lhs, BasicBlock rhs) {
+	public static InterleavedBlock randomlyInterleaved(RandomGenerator rng, ResourcePartition partitionLhs, ResourcePartition partitionRhs, BasicBlock lhs, BasicBlock rhs) {
 		var picks = new BitSet(lhs.size() + rhs.size());
 
 		{

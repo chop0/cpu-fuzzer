@@ -1,4 +1,4 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.instruction;
 
 
 import java.util.Arrays;

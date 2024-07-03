@@ -1,5 +1,6 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.instruction;
 
+import ax.xz.fuzz.blocks.BlockGenerator;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 

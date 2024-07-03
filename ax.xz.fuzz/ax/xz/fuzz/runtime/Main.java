@@ -1,6 +1,10 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.mutate.PrefixAdder;
+import ax.xz.fuzz.instruction.RegisterSet;
+import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.blocks.BasicBlock;
+import ax.xz.fuzz.blocks.BlockGenerator;
+import ax.xz.fuzz.blocks.InterleavedBlock;
 
 import java.lang.foreign.*;
 import java.time.Duration;
@@ -8,7 +12,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Random;
 
-import static ax.xz.fuzz.TestCase.randomBranch;
+import static ax.xz.fuzz.runtime.TestCase.randomBranch;
 import static ax.xz.fuzz.tester.slave_h.*;
 import static com.github.icedland.iced.x86.Register.R15;
 import static java.time.Instant.now;

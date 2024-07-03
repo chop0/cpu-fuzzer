@@ -1,8 +1,8 @@
 package ax.xz.fuzz.encoding;
 
-import ax.xz.fuzz.RegisterSet;
-import ax.xz.fuzz.Registers;
-import ax.xz.fuzz.StatusFlag;
+import ax.xz.fuzz.instruction.RegisterSet;
+import ax.xz.fuzz.instruction.Registers;
+import ax.xz.fuzz.instruction.StatusFlag;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
@@ -11,7 +11,7 @@ import com.github.icedland.iced.x86.OpKind;
 
 import java.util.*;
 
-import static ax.xz.fuzz.RegisterSet.*;
+import static ax.xz.fuzz.instruction.RegisterSet.*;
 import static com.github.icedland.iced.x86.Register.*;
 
 public record Instruction(

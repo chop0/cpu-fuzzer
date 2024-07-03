@@ -1,4 +1,4 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.tester.slave_h;
 

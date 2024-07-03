@@ -1,5 +1,7 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.blocks.InterleavedBlock;
 import com.github.icedland.iced.x86.*;
 import com.github.icedland.iced.x86.asm.AsmRegister64;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
@@ -10,7 +12,6 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
 import java.nio.ByteBuffer;
 import java.util.Objects;
-import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.random.RandomGenerator;
 

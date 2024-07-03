@@ -1,5 +1,7 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.blocks.BasicBlock;
+import ax.xz.fuzz.blocks.BlockGenerator;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 
 import java.lang.foreign.Arena;

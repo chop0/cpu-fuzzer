@@ -1,12 +1,11 @@
-package ax.xz.fuzz;
+package ax.xz.fuzz.blocks;
 
+import ax.xz.fuzz.instruction.Opcode;
+import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.mutate.DeferredMutation;
 import com.github.icedland.iced.x86.Instruction;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
-import java.util.List;
 
 public class InterleavedBlock extends BasicBlock {
 	private final int[] lhsIndices, rhsIndices;
