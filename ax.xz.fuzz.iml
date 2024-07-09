@@ -13,6 +13,8 @@
     <orderEntry type="library" name="jackson-core-2.16.0-rc1" level="project" />
     <orderEntry type="library" name="jackson-databind-2.16.0-rc1" level="project" />
     <orderEntry type="library" name="jackson-annotations-2.16.0-rc1" level="project" />
+    <orderEntry type="library" name="reflections-0.10.2" level="project" />
+    <orderEntry type="library" name="slf4j-api-2.0.13" level="project" />
   </component>
   <component name="SonarLintModuleSettings">
     <option name="uniqueId" value="574ed939-13f9-4234-b3b4-f9c5917c8bf8" />

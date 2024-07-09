@@ -1,9 +1,12 @@
 package ax.xz.fuzz.mutate;
 
+import ax.xz.fuzz.instruction.Opcode;
+import ax.xz.fuzz.instruction.Operand;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.random.RandomGenerator;
 
@@ -12,14 +15,14 @@ import static java.lang.Math.min;
 
 public class PrefixAdder implements Mutator {
 	private static final byte[] PREFIXES = {
-			(byte) 0xF0, //(byte) 0xF2, (byte) 0xF3,
+//			(byte) 0xF0, (byte) 0xF2, (byte) 0xF3,
 			(byte) 0x2E, (byte) 0x36, (byte) 0x3E, (byte) 0x26, (byte) 0x64, (byte) 0x65,
-//			(byte) 0x66, (byte) 0x67
+			(byte) 0x66, (byte) 0x67
 	};
 
 	@Override
-	public boolean appliesTo(Instruction instruction, ResourcePartition rp) {
-		return true;
+	public boolean appliesTo(Opcode  opcode, Instruction instruction, ResourcePartition rp) {
+		return Arrays.stream(opcode.operands()).noneMatch(op -> op instanceof Operand.Counted);
 	}
 
 	@Override
@@ -35,15 +38,12 @@ public class PrefixAdder implements Mutator {
 
 			@Override
 			public byte[] perform(byte[] instruction) {
-				byte[] result = new byte[instruction.length + addedPrefixes.size() + 2];
+				byte[] result = new byte[instruction.length + addedPrefixes.size()];
 				for (int i = 0; i < addedPrefixes.size(); i++) {
 					result[i] = addedPrefixes.get(i).prefix;
 				}
 
 				System.arraycopy(instruction, 0, result, addedPrefixes.size(), instruction.length);
-				result[result.length - 2] = (byte) 0x90;
-				result[result.length - 1] = (byte) 0x90; // NOP in case the operand extension prefix fucks up the decoding
-
 				return result;
 			}
 
@@ -59,7 +59,7 @@ public class PrefixAdder implements Mutator {
 			}
 		}
 
-		int addedCount = rng.nextInt(4);
+		int addedCount = rng.nextInt(2);
 		var prefixes = new ArrayList<AddedPrefix>(addedCount);
 
 		for (int i = 0; i < addedCount; i++) {

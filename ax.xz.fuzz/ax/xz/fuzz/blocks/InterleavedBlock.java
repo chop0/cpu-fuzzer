@@ -3,76 +3,251 @@ package ax.xz.fuzz.blocks;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.mutate.DeferredMutation;
+import ax.xz.fuzz.runtime.TestCase;
 import com.github.icedland.iced.x86.Instruction;
 
-import java.util.Arrays;
+import java.util.*;
+import java.util.stream.Collectors;
 
-public class InterleavedBlock extends BasicBlock {
-	private final int[] lhsIndices, rhsIndices;
-	private final ResourcePartition[]  partitions;
+public class InterleavedBlock implements Block {
+	private final Block lhs, rhs;
 
-	public InterleavedBlock(Opcode[] opcodes, ResourcePartition[] partitions, Instruction[] instructions, DeferredMutation[][] mutations, int[] lhsIndices, int[] rhsIndices) {
-		super(opcodes, instructions, mutations);
-		this.lhsIndices = lhsIndices;
-		this.rhsIndices = rhsIndices;
+	private final BitSet picks;
 
-		this.partitions = partitions;
-	}
+	private final int[] lhsIndices, rhsIndices; // indices[original_idx] contains the index of the item in the interleaved block
+	private final int[] indices; // indices[interleaved_idx] contains the index of the item in the original lhs/rhs block
 
-	public int[] lhsIndices() {
-		return lhsIndices;
-	}
+	public InterleavedBlock(Block lhs, Block rhs, BitSet picks) {
+		this.lhs = lhs;
+		this.rhs = rhs;
+		this.picks = picks;
 
-	public int[] rhsIndices() {
-		return rhsIndices;
-	}
+		this.indices = new int[lhs.size() + rhs.size()];
+		this.lhsIndices = new int[lhs.size()];
+		this.rhsIndices = new int[rhs.size()];
 
-	public ResourcePartition partitionOf(int index) {
-		return partitions[index];
+		int lhsIndex = 0, rhsIndex = 0;
+		for (int i = 0; i < (lhs.size() + rhs.size()); i++) {
+			if (picks.get(i)) {
+				lhsIndices[lhsIndex] = i;
+				indices[i] = lhsIndex++;
+			} else {
+				rhsIndices[rhsIndex] = i;
+				indices[i] = rhsIndex++;
+			}
+		}
 	}
 
 	@Override
-	public InterleavedBlock without(int instructionIndex) {
-		boolean isInRhs = Arrays.stream(rhsIndices).anyMatch(n -> n == instructionIndex);
+	public int size() {
+		return lhs.size() + rhs.size();
+	}
 
-		var lhsIndices = new int[isInRhs ? this.lhsIndices.length : this.lhsIndices.length - 1];
-		var rhsIndices = new int[isInRhs ? this.rhsIndices.length - 1 : this.rhsIndices.length];
+	@Override
+	public SequencedCollection<BlockEntry> items() {
+		return new ItemSequence(false);
+	}
 
-		var opcodes = new Opcode[opcodes().length - 1];
-		var partitions = new ResourcePartition[opcodes().length - 1];
-		var mutations = new DeferredMutation[opcodes().length - 1][];
-		var instructions = new Instruction[instructions().length - 1];
+	public int leftInterleavedIndex(int lhsIndex) {
+		return lhsIndices[lhsIndex];
+	}
 
-		int overallIndex = 0, lhsIndex = 0, rhsIndex = 0;
+	public int rightInterleavedIndex(int rhsIndex) {
+		return rhsIndices[rhsIndex];
+	}
 
-		for (int i = 0; i < this.lhsIndices.length + this.rhsIndices.length; i++) {
-			if (i == instructionIndex) {
-				continue;
+	public Block lhs() {
+		return lhs;
+	}
+
+	public Block rhs() {
+		return rhs;
+	}
+
+	private class ItemSequence implements SequencedCollection<BlockEntry> {
+		private final boolean reverse;
+
+		private ItemSequence(boolean reverse) {
+			this.reverse = reverse;
+		}
+
+		@Override
+		public SequencedCollection<BlockEntry> reversed() {
+			return new ItemSequence(!reverse);
+		}
+
+		@Override
+		public int size() {
+			return indices.length;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return indices.length == 0;
+		}
+
+		@Override
+		public boolean contains(Object o) {
+			if (!(o instanceof BlockEntry entry)) {
+				return false;
 			}
 
-			opcodes[overallIndex] = opcodes()[i];
-			partitions[overallIndex] = this.partitions[i];
-			mutations[overallIndex] = this.mutations()[i];
-			instructions[overallIndex] = instructions()[i];
-
-			if (instructions()[i] == null) {
-				throw new NullPointerException("Instruction is null");
+			for (var item : this) {
+				if (item == entry || item.equals(entry)) {
+					return true;
+				}
 			}
 
-			overallIndex++;
+			return false;
+		}
 
-			int finalI = i;
-			if ((Arrays.stream(lhsIndices).anyMatch(n -> n == finalI) && lhsIndex < lhsIndices.length) || rhsIndex >= rhsIndices.length) {
-				lhsIndices[lhsIndex++] = i;
+		@Override
+		public Iterator<BlockEntry> iterator() {
+			return new Iterator<>() {
+				private final Iterator<BlockEntry> lhsIter, rhsIter;
+				private int position = reverse ? indices.length - 1 : 0;
+
+				{
+					if (reverse) {
+						lhsIter = lhs.items().reversed().iterator();
+						rhsIter = rhs.items().reversed().iterator();
+					} else {
+						lhsIter = lhs.items().iterator();
+						rhsIter = rhs.items().iterator();
+					}
+				}
+
+				@Override
+				public boolean hasNext() {
+					return position >= 0 && position < indices.length;
+				}
+
+				@Override
+				public BlockEntry next() {
+					if (!hasNext()) {
+						throw new NoSuchElementException();
+					}
+
+					var result = picks.get(position) ? lhsIter.next()  :rhsIter.next() ;
+					position += reverse ? -1 : 1;
+					return result;
+				}
+			};
+		}
+
+		@Override
+		public BlockEntry[] toArray() {
+			var result = new BlockEntry[indices.length];
+			int i = 0;
+			for (var item : this) {
+				result[i++] = item;
+			}
+			return result;
+		}
+
+		@Override
+		public <T> T[] toArray(T[] a) {
+			if (a.length < indices.length) {
+				a = Arrays.copyOf(a, indices.length);
+			}
+
+			int i = 0;
+			for (var item : this) {
+				a[i++] = (T) item;
+			}
+
+			return a;
+		}
+
+		@Override
+		public boolean add(BlockEntry blockEntry) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean remove(Object o) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean containsAll(Collection<?> c) {
+			for (var o : c) {
+				if (!contains(o)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		@Override
+		public boolean addAll(Collection<? extends BlockEntry> c) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean removeAll(Collection<?> c) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean retainAll(Collection<?> c) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void clear() {
+			throw new UnsupportedOperationException();
+		}
+	}
+
+	@Override
+	public String toString() {
+		var sb = new StringBuilder();
+		for (var item : items()) {
+			var bytes = TestCase.encode(item.instruction());
+
+			for (var deferredMutation : item.mutations()) {
+				bytes = deferredMutation.perform(bytes);
+			}
+
+			sb.append("new byte[]{");
+			for (var b : bytes) {
+				sb.append(String.format("(byte) 0x%02x, ", b));
+			}
+			sb.append("},\n");
+		}
+
+		return sb.toString();
+	}
+
+
+
+	@Override
+	public Block without(int... instructionIndex) {
+		var skipIndices = Arrays.stream(instructionIndex).boxed().collect(Collectors.toSet());
+
+		var lhsSkip = new ArrayList<Integer>();
+		var rhsSkip = new ArrayList<Integer>();
+		var newPicks = new BitSet(lhs.size() + rhs.size());
+		int picksIndex = 0;
+
+		for (int i = 0; i < lhs.size() + rhs.size(); i++) {
+			if (!skipIndices.contains(i)) {
+				newPicks.set(picksIndex++, picks.get(i));
+			}
+		}
+
+		for (var i : skipIndices) {
+			if (picks.get(i)) {
+				lhsSkip.add(indices[i]);
 			} else {
-				rhsIndices[rhsIndex++] = i;
+				rhsSkip.add(indices[i]);
 			}
 		}
 
-		if (overallIndex != opcodes.length) {
-			throw new IllegalStateException("Index mismatch");
-		}
+		var newLhs = lhs.without(lhsSkip.stream().mapToInt(i -> i).toArray());
+		var newRhs = rhs.without(rhsSkip.stream().mapToInt(i -> i).toArray());
 
-		return new InterleavedBlock(opcodes, partitions, instructions, mutations, lhsIndices, rhsIndices);
+		return new InterleavedBlock(newLhs, newRhs, newPicks);
 	}
 }

@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Master" type="Application" factoryName="Application" nameIsGenerated="true">
+    <option name="MAIN_CLASS_NAME" value="ax.xz.fuzz.runtime.Master" />
+    <module name="ax.xz.fuzz" />
+    <target name="guest@amd-server:22" />
+    <option name="VM_PARAMETERS" value="-Djava.library.path=/home/guest/cpu-fuzzer" />
+    <extension name="coverage">
+      <pattern>
+        <option name="PATTERN" value="ax.xz.fuzz.runtime.*" />
+        <option name="ENABLED" value="true" />
+      </pattern>
+    </extension>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

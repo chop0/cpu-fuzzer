@@ -1,5 +1,6 @@
 package ax.xz.fuzz.mutate;
 
+import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
 
@@ -8,14 +9,17 @@ import java.util.random.RandomGenerator;
 
 public class MutationFactory {
 	private static final Mutator[] mutators = {
-			new PrefixDuplicator()
+//			new PrefixAdder(),
+//			new RexAdder(),
+//			new VexAdder(),
+//			new PrefixDuplicator()
 	};
 
-	public DeferredMutation[] createMutations(Instruction original, ResourcePartition partition, RandomGenerator rng) {
+	public DeferredMutation[] createMutations(Opcode code, Instruction original, ResourcePartition partition, RandomGenerator rng) {
 		var mutations = new ArrayList<DeferredMutation>();
 
 		for (Mutator mutator : mutators) {
-			if (mutator.appliesTo(original, partition)) {
+			if (mutator.appliesTo(code, original, partition)) {
 				mutations.add(mutator.createMutation(original, rng, partition));
 			}
 		}

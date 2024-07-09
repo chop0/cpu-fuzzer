@@ -1,0 +1,15 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="ax.xz.fuzz:jar">
+    <output-path>$PROJECT_DIR$</output-path>
+    <root id="archive" name="ax.xz.fuzz_jar.jar">
+      <element id="module-output" name="ax.xz.fuzz" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/jackson-core-2.16.0-rc1.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/antlr-4.13.1-complete.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/jackson-annotations-2.16.0-rc1.jar" path-in-jar="/" />
+      <element id="library" level="project" name="slf4j-api-2.0.13" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/jackson-databind-2.16.0-rc1.jar" path-in-jar="/" />
+      <element id="library" level="project" name="reflections-0.10.2" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/iced-x86-1.20.0.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>

@@ -19,6 +19,8 @@ public final class RegisterSet {
 	public static RegisterSet GPQ = RegisterSet.of(rangeClosed(RAX, R15).toArray());
 	public static RegisterSet GP = GPB.union(GPW).union(GPD).union(GPQ);
 
+	public static RegisterSet CR = RegisterSet.of(rangeClosed(CR0, CR15).toArray());
+
 	public static RegisterSet EXTENDED_GP = GPQ // things that trigger rex prefix
 			.union(RegisterSet.of(rangeClosed(R8D, R15D).toArray()))
 			.union(RegisterSet.of(rangeClosed(R8W, R15W).toArray()))
@@ -49,8 +51,8 @@ public final class RegisterSet {
 
 	public static RegisterSet SEGMENT = RegisterSet.of(rangeClosed(ES, GS).toArray());
 	public static final RegisterSet SPECIAL = of(Registers.MXCSR);
-	public static RegisterSet ALL_VEX = GP.union(VECTOR_VEX).union(MASK).union(SEGMENT).union(SPECIAL);
-	public static RegisterSet ALL_EVEX = GP.union(ST).union(VECTOR_EVEX).union(MASK).union(SEGMENT).union(SPECIAL);
+	public static RegisterSet ALL_VEX = GP.union(VECTOR_VEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
+	public static RegisterSet ALL_EVEX = GP.union(ST).union(VECTOR_EVEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
 
 
 	public static RegisterSet of(int... registers) {

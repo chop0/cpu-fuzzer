@@ -23,7 +23,20 @@
         </config>
         <ContributedStateBase type="JavaLanguageRuntime">
           <config>
-            <option name="homePath" value="/afs/csail.mit.edu/u/a/apetri/usr/lib/jvm/jdk-22.0.1" />
+            <option name="homePath" value="/home/apetri/usr/lib/jvm/jdk-22.0.1" />
+            <option name="javaVersionString" value="22.0.1" />
+          </config>
+        </ContributedStateBase>
+      </target>
+      <target name="guest@amd-server:22" type="ssh/sftp" uuid="0464352d-5bc0-40d9-895d-f19927213710">
+        <config>
+          <option name="projectRootOnTarget" value="/home/guest/cpu-fuzzer" />
+          <option name="serverName" value="guest@amd-server:22 agent" />
+          <option name="useRsync" value="true" />
+        </config>
+        <ContributedStateBase type="JavaLanguageRuntime">
+          <config>
+            <option name="homePath" value="/usr/lib/jvm/default-java" />
             <option name="javaVersionString" value="22.0.1" />
           </config>
         </ContributedStateBase>

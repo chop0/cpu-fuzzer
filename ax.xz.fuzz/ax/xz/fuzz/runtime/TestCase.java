@@ -1,7 +1,6 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.instruction.ResourcePartition;
-import ax.xz.fuzz.blocks.InterleavedBlock;
+import ax.xz.fuzz.blocks.Block;
 import com.github.icedland.iced.x86.*;
 import com.github.icedland.iced.x86.asm.AsmRegister64;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
@@ -20,19 +19,21 @@ public final class TestCase {
 		System.loadLibrary("slave");
 	}
 
-	public static final MemorySegment TEST_CASE_FINISH = SymbolLookup.loaderLookup().find("test_case_finish").orElseThrow();
-	private final InterleavedBlock[] blocks;
+	public static final MemorySegment TEST_CASE_FINISH = SymbolLookup.loaderLookup().find("test_case_exit").orElseThrow();
+	private final Block[] blocks;
 	private final Branch[] branches;
 
-
-	public TestCase(InterleavedBlock[] blocks, Branch[] branches) {
+	public TestCase(Block[] blocks, Branch[] branches) {
 		if (blocks.length == 0)
 			throw new IllegalArgumentException("blocks must not be empty");
-		this.blocks = blocks;
-		this.branches = branches;
+		this.blocks = new Block[blocks.length];
+		this.branches = new Branch[branches.length];
+
+		System.arraycopy(blocks, 0, this.blocks, 0, blocks.length);
+		System.arraycopy(branches, 0, this.branches, 0, branches.length);
 	}
 
-	private byte[] encode(ResourcePartition rp, Instruction instruction, RandomGenerator rng) {
+	public static byte[] encode(Instruction instruction) {
 		byte[] result = new byte[15];
 		var buf = ByteBuffer.wrap(result);
 		var ca = new CodeAssembler(64);
@@ -44,7 +45,7 @@ public final class TestCase {
 		return trimmed;
 	}
 
-	public void encode(RandomGenerator rng, long rip, CodeWriter cw, int counterRegister, int counterBound) {
+	public int encode(long rip, Trampoline trampoline, MemorySegment code, int counterRegister, int counterBound) {
 		var assembler = new CodeAssembler(64);
 
 		var counter = new AsmRegister64(new ICRegister(counterRegister));
@@ -70,16 +71,15 @@ public final class TestCase {
 			assembler.jge(exit);
 			assembler.inc(counter);
 
-			Instruction[] instructions = blocks[i].instructions();
-			for (int j = 0; j < instructions.length; j++) {
-				if (instructions[j] == null)
+			for (var item : blocks[i].items()) {
+				if (item == null)
 					throw new IllegalArgumentException("instruction must not be null");
 
-				var insn = instructions[j];
+				var insn = item.instruction();
 
-				var encoded = encode(blocks[i].partitionOf(j), insn, rng);
+				var encoded = encode(insn);
 
-				for (var mutation : blocks[i].mutations()[j]) {
+				for (var mutation : item.mutations()) {
 					encoded = mutation.perform(encoded);
 				}
 
@@ -91,9 +91,12 @@ public final class TestCase {
 		}
 
 		assembler.label(exit);
-		assembler.jmp(TEST_CASE_FINISH.address());
+		assembler.jmp(trampoline.relocate(TEST_CASE_FINISH).address());
 
-		var result = (CodeAssemblerResult) assembler.assemble(cw, rip);
+		var bb = code.asByteBuffer();
+		int initialPosition = bb.position();
+		var result = (CodeAssemblerResult) assembler.assemble(bb::put, rip);
+		return bb.position() - initialPosition;
 	}
 
 	record Branch(BranchType type, int takenIndex, int notTakenIndex) {
@@ -109,7 +112,7 @@ public final class TestCase {
 		return BranchType.values()[rng.nextInt(BranchType.values().length)];
 	}
 
-	private enum BranchType {
+	public enum BranchType {
 		JO(CodeAssembler::jo),
 		JNO(CodeAssembler::jno),
 		JS(CodeAssembler::js),
@@ -136,17 +139,16 @@ public final class TestCase {
 	@Override
 	public String toString() {
 		var sb = new StringBuilder();
-		for (int i = 0; i < blocks.length; i++) {
-			sb.append(i).append(":\n");
-			sb.append(blocks[i].toString()).append("\n");
-			sb.append(branches[i].toString());
+		for (Block block : blocks) {
+			sb.append("new byte[][]{").append(block.toString()).append("},");
+//			sb.append(branches[i].toString());
 			sb.append("\n\n");
 		}
 
 		return sb.toString();
 	}
 
-	public InterleavedBlock[] blocks() {
+	public Block[] blocks() {
 		return blocks;
 	}
 

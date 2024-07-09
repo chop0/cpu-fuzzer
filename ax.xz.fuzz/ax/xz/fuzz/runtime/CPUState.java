@@ -7,6 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
@@ -43,11 +44,29 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 		);
 	}
 
+	public static CPUState random(RandomGenerator rng) {
+		return new CPUState(
+				GeneralPurposeRegisters.random(rng),
+				VectorRegisters.random(rng),
+				MMXRegisters.random(rng),
+				0
+		);
+	}
+
 
 	record GeneralPurposeRegisters(long rax, long rbx, long rcx, long rdx, long rsi, long rdi, long rbp, long r8,
 								   long r9, long r10, long r11, long r12, long r13, long r14, long r15, long rsp) {
 		static GeneralPurposeRegisters filledWith(long thing) {
 			return new GeneralPurposeRegisters(thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing);
+		}
+
+		static GeneralPurposeRegisters random(RandomGenerator rng) {
+			return new GeneralPurposeRegisters(
+					rng.nextLong(), rng.nextLong(), rng.nextLong(), rng.nextLong(),
+					rng.nextLong(), rng.nextLong(), rng.nextLong(), rng.nextLong(),
+					rng.nextLong(), rng.nextLong(), rng.nextLong(), rng.nextLong(),
+					rng.nextLong(), rng.nextLong(), rng.nextLong(), rng.nextLong()
+			);
 		}
 
 		static GeneralPurposeRegisters ofSavedState(MemorySegment savedState) {
@@ -111,6 +130,14 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 			);
 		}
 
+		static VectorRegisters random(RandomGenerator rng) {
+			var zmm = new byte[32][64];
+			for (byte[] bytes : zmm) {
+				rng.nextBytes(bytes);
+			}
+			return new VectorRegisters(zmm);
+		}
+
 		void toArray(MemorySegment savedState) {
 			for (int i = 0; i < zmm.length; i++) {
 				savedState.asSlice(i, ZMM).copyFrom(MemorySegment.ofArray(zmm[i]));
@@ -133,7 +160,14 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 		public boolean equals(Object obj) {
 			if (obj == this) return true;
 			if (!(obj instanceof VectorRegisters vr)) return false;
-			return Arrays.deepEquals(zmm, vr.zmm);
+
+			for (int i = 0; i < zmm.length; i++) {
+				if (!Arrays.equals(zmm[i], vr.zmm[i])) {
+					return false;
+				}
+			}
+
+			return true;
 		}
 	}
 
@@ -141,6 +175,14 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 		static MMXRegisters filledWith(long thing) {
 			var mm = new long[8];
 			Arrays.fill(mm, thing);
+			return new MMXRegisters(mm);
+		}
+
+		static MMXRegisters random(RandomGenerator rng) {
+			var mm = new long[8];
+			for (int i = 0; i < mm.length; i++) {
+				mm[i] = rng.nextLong();
+			}
 			return new MMXRegisters(mm);
 		}
 

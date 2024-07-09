@@ -47,6 +47,7 @@ public class InstructionReference {
 		s.put("ZEROALL", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.SuppressedOperand.Reg::new).toArray(Operand.SuppressedOperand[]::new));
 
 		suppressedOperands = Collections.unmodifiableMap(s);
+		System.out.println("Loaded " + suppressedOperands.size() + " suppressed operands");
 	}
 
 	private static <T extends Operand.SuppressedOperand> Map<String, Set<T>> mnemonicToOperands(Document doc, Function<Node, Set<T>> mapper) {
@@ -60,15 +61,6 @@ public class InstructionReference {
 							return c;
 						})
 				));
-	}
-
-	private static <K, V> Map<K, V> mapOf(K key, V value, Object... alteratingsKeysAndValues) {
-		Map<K, V> map = new LinkedHashMap<K, V>();
-		map.put(key, value);
-		for (int i = 0; i < alteratingsKeysAndValues.length; i += 2)
-			map.put((K) alteratingsKeysAndValues[i],
-					(V) alteratingsKeysAndValues[i + 1]);
-		return map;
 	}
 
 
@@ -94,18 +86,14 @@ public class InstructionReference {
 		mnemonic = normaliseConditionalInstruction(instruction, mnemonic);
 		mnemonic = stripMnemonic(mnemonic);
 
-		var result = suppressedOperands.get(mnemonic);
-		if (result == null)
-			return null;
-
-		return result != null ? result : new Operand.SuppressedOperand[0];
+		return suppressedOperands.get(mnemonic);
 	}
 
 	private static String stripMnemonic(String mnemonic) {
 		return mnemonic.replaceAll("\\{[a-z0-9]*\\}", "")
 				.replaceAll("64|32|16|8", "")
 				.replaceAll("B|W|D|Q$", "")
-				.replaceAll("^(V|R)", "")
+				.replaceAll("^[VR]", "")
 				.replace(" ", "");
 	}
 

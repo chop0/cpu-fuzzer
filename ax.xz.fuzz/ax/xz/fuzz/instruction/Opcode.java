@@ -17,9 +17,10 @@ import java.util.stream.IntStream;
 
 import static java.util.stream.Stream.concat;
 
-public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant, Operand[] operands) {
-	public Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant, Operand[] operands) {
+public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnemonic, int icedVariant, Operand[] operands) {
+	public Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnemonic, int icedVariant, Operand[] operands) {
 		this.prefixes = prefixes;
+		this.icedFieldName = icedFieldName;
 		this.mnemonic = mnemonic;
 		this.icedVariant = icedVariant;
 		this.operands = operands;
@@ -69,10 +70,11 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 			return null;
 
 		if (operands.length < Instruction.create(icedVariant).getOpCount())
-			throw new IllegalStateException("Not enough operands");
+			return null;
 
 		return new Opcode(
 				prefixes.stream().map(Prefix::valueOf).collect(Collectors.toCollection(() -> EnumSet.noneOf(Prefix.class))),
+				icedFieldName,
 				mnemonic,
 				icedVariant,
 				operands
@@ -90,7 +92,6 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 		try {
 			walker.walk(listener, parser.operand());
 		} catch (Exception e) {
-			e.printStackTrace();
 			return null;
 		}
 
@@ -115,6 +116,15 @@ public record Opcode(EnumSet<Prefix> prefixes, String mnemonic, int icedVariant,
 				case Operand.SuppressedOperand _ -> {
 				}
 			}
+		}
+
+//		insn.setRepePrefix(randomGenerator.nextInt(30) == 0);
+//		insn.setRepnePrefix(randomGenerator.nextInt(30) == 0);
+//		insn.setRepPrefix(randomGenerator.nextInt(30) == 0);
+//		insn.setLockPrefix(randomGenerator.nextInt(30) == 0);
+
+		if (randomGenerator.nextInt(3) == 0) {
+			insn.setSegmentPrefix(RegisterSet.SEGMENT.choose(randomGenerator));
 		}
 
 //		if ( randomGenerator.nextBoolean()) {

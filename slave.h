@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -5,7 +7,7 @@
 #include <setjmp.h>
 // perror
 #include <stdio.h>
-
+#include <unistd.h>
 #include <signal.h>
 
 #ifdef __AVX512F__
@@ -14,6 +16,17 @@
 #else
 #define AVX_REGISTERS 16
 #endif
+
+void routine_begin(void);
+void routine_end(void);
+
+typedef struct {
+    void *trampoline_code;
+    void *scratch1;
+    void *scratch2;
+
+    int scratch_pkey;
+} trampoline_t;
 
 struct saved_state {
     uint64_t fs_base, gs_base, rax, rbx, rcx, rdx, rsi, rdi, rbp, r8, r9, r10, r11, r12, r13, r14, r15, rsp;
@@ -37,5 +50,5 @@ struct execution_result {
     };
 };
 
-void do_test(uint8_t *code, size_t code_length, struct execution_result *result);
-void test_case_finish(void);
+void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *result);
+void test_case_exit(void);

@@ -1,18 +1,10 @@
-.bss
-saved_rsp:
-    .quad 0
-addr:
-    .quad 0
-saved_fs:
-    .quad 0
-saved_gs:
-    .quad 0
-saved_state:
-    .quad 0
-temp:
-    .quad 0
+.global routine_begin
+.global pkru_value_entry
+.global pkru_value_exit
+.global test_case_entry
+.global test_case_exit
+.global routine_end
 
-.text
 .macro push_unclobberable_gprs
     push %r12
     push %r13
@@ -81,11 +73,6 @@ temp:
     movq saved_gs(%rip), %r12
     wrgsbase %r12
 .endm
-
-.global restore_fs_gs_base
-restore_fs_gs_base:
-    restore_fs_gs_base
-    ret
 
 .macro save_unclobberable_state
     push_unclobberable_gprs
@@ -165,14 +152,70 @@ done:
     vector_regs_ write_vector_regs_, offset
 .endm
 
-.global jump_to_code
-.global test_case_finish
-jump_to_code:
+.macro swap_pkru_entry
+    movq %rax, temp(%rip)
+    movq %rcx, temp2(%rip)
+    movq %rdx, temp3(%rip)
+
+    # mov eax, _____ instruction here:
+    .byte 0xb8
+    pkru_value_entry: # immediate of the mov eax instruction
+    .long 0
+
+    xor %ecx, %ecx
+    xor %edx, %edx
+
+    wrpkru
+
+    movq temp(%rip), %rax
+    movq temp2(%rip), %rcx
+    movq temp3(%rip), %rdx
+.endm
+
+.macro clear_pkru
+    movq %rax, temp(%rip)
+    movq %rcx, temp2(%rip)
+    movq %rdx, temp3(%rip)
+
+    .byte 0xb8
+    pkru_value_exit: # immediate of the mov eax instruction
+    .long 0
+
+    xor %ecx, %ecx
+    xor %edx, %edx
+
+    wrpkru
+    movq temp(%rip), %rax
+    movq temp2(%rip), %rcx
+    movq temp3(%rip), %rdx
+.endm
+
+.text
+routine_begin:
+
+saved_rsp:
+    .quad 0
+addr:
+    .quad 0
+saved_fs:
+    .quad 0
+saved_gs:
+    .quad 0
+saved_state:
+    .quad 0
+temp:
+    .quad 0
+temp2:
+    .quad 0
+temp3:
+    .quad 0
+
+
+test_case_entry:
     movq %rdi, addr(%rip)
     movq %rsi, saved_state(%rip)
-test_case_start:
+
     save_unclobberable_state
-    cpuid
 
     movq saved_state(%rip), %r15
     read_vector_regs 144
@@ -203,17 +246,17 @@ test_case_start:
     movq 104(%r15), %r12
     movq 112(%r15), %r13
     movq 120(%r15), %r14
-    # movq 128(%r15), %r15 // this happens later
     lea 2256(%r15), %rsp
     popfq
     movq 136(%r15), %rsp
-
     movq 128(%r15), %r15
 
+    swap_pkru_entry
     jmp *addr(%rip)
 
-.global test_case_finish
-test_case_finish:
+test_case_exit:
+    clear_pkru
+
     movq %r15, temp(%rip)
     movq saved_state(%rip), %r15
     movq %rax, 16(%r15)
@@ -252,7 +295,6 @@ test_case_finish:
     movq %mm6, 2240(%r15)
     movq %mm7, 2248(%r15)
 
-
     restore_unclobberable_state
-
     ret
+routine_end:

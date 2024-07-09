@@ -1,87 +1,52 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.blocks.BasicBlock;
+import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.blocks.InterleavedBlock;
 import ax.xz.fuzz.tester.execution_result;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Objects;
-import java.util.Random;
-import java.util.random.RandomGenerator;
+import java.util.*;
+import java.util.function.BiFunction;
 
+import static ax.xz.fuzz.runtime.Tester.SCRATCH_PKEY;
 import static ax.xz.fuzz.tester.slave_h.*;
 import static ax.xz.fuzz.tester.slave_h.do_test;
 import static com.github.icedland.iced.x86.Register.R15;
 
 public class Minimiser {
-	public static void minimise(int seed, Runnable reset, InterleavedBlock[] test1, InterleavedBlock[] test2, TestCase.Branch[] branches) throws BasicBlock.UnencodeableException {
-		var rng = new Random();
-
+	public static void minimise(Runnable reset, Block[] test1, Block[] test2, TestCase.Branch[] branches) {
 		for (;;) {
 			boolean changed = false;
 
 			for (int block = 0; block < test1.length; block++) {
-				var a = test1[block];
-				var b = test2[block];
-
-				for (int i = 0; i < a.lhsIndices().length; i++) {
-					reset.run();
-
-					int test1Index = a.lhsIndices()[i];
-					int test2Index = b.lhsIndices()[i];
-
-					var aWithout = a.without(test1Index);
-					var bWithout = b.without(test2Index);
-
-					var test1Changed = test1.clone();
-					var test2Changed = test2.clone();
-
-					test1Changed[block] = aWithout;
-					test2Changed[block] = bWithout;
-
-					rng.setSeed(seed);
-					var test1Result = run(rng, new TestCase(test1Changed, branches));
-					rng.setSeed(seed);
-					var test2Result = run(rng, new TestCase(test2Changed, branches));
-
-					if (mismatch(test1Result, test2Result)) {
-						test1[block] = aWithout;
-						test2[block] = bWithout;
-						System.out.println("Found redundant instruction in LHS at " + i);
-						changed = true;
-					}
+				if (!(test1[block] instanceof InterleavedBlock a && test2[block] instanceof InterleavedBlock b)) {
+					System.out.println("Skipping non-interleaved block");
+					continue;
 				}
 
-				for (int i = 0; i < a.rhsIndices().length; i++) {
-					reset.run();
+				reset.run();
+				var redundantLeft = findRedundantInstructions(a.lhs().size(), test1, test2, branches, block, InterleavedBlock::leftInterleavedIndex);
 
-					int test1Index = a.rhsIndices()[i];
-					int test2Index = b.rhsIndices()[i];
+				if (!redundantLeft.isEmpty()) {
+					test1[block] = a.without(redundantLeft.stream().mapToInt(a::leftInterleavedIndex).toArray());
+					test2[block] = b.without(redundantLeft.stream().mapToInt(b::leftInterleavedIndex).toArray());
 
-					var aWithout = a.without(test1Index);
-					var bWithout = b.without(test2Index);
+					changed = true;
+					System.err.printf("Removed %d redundant instructions from block %d%n", redundantLeft.size(), block);
+					break;
+				}
 
-					var test1Changed = test1.clone();
-					var test2Changed = test2.clone();
+				var redundantRight = findRedundantInstructions(a.rhs().size(), test1, test2, branches, block, InterleavedBlock::rightInterleavedIndex);
 
-					test1Changed[block] = aWithout;
-					test2Changed[block] = bWithout;
+				if (!redundantRight.isEmpty()) {
+					test1[block] = a.without(redundantRight.stream().mapToInt(a::rightInterleavedIndex).toArray());
+					test2[block] = b.without(redundantRight.stream().mapToInt(b::rightInterleavedIndex).toArray());
 
-					rng.setSeed(seed);
-					var test1Result = run(rng, new TestCase(test1Changed, branches));
-					rng.setSeed(seed);
-					var test2Result = run(rng, new TestCase(test2Changed, branches));
-
-					if (mismatch(test1Result, test2Result)) {
-						test1[block] = aWithout;
-						test2[block] = bWithout;
-						System.out.println("Found redundant instruction in LHS at " + i);
-						changed = true;
-					}
+					changed = true;
+					System.err.printf("Removed %d redundant instructions from block %d%n", redundantRight.size(), block);
+					break;
 				}
 			}
 
@@ -89,23 +54,59 @@ public class Minimiser {
 				break;
 		}
 
-		System.out.println("Minimised A:");
-		System.out.println(new TestCase(test1, branches));
-		System.out.println("Minimised B:");
-		System.out.println(new TestCase(test2, branches));
+		System.err.println("Minimised A:");
+		System.err.println(new TestCase(test1, branches));
+		System.err.println("Minimised B:");
+		System.err.println(new TestCase(test2, branches));
 	}
 
-	private static ExecutionResult run(RandomGenerator rng, TestCase tc) {
+	private static ArrayList<Integer> findRedundantInstructions(int victimBlockSize, Block[] test1, Block[] test2, TestCase.Branch[] branches, int blockToReduce, BiFunction<InterleavedBlock, Integer, Integer> getVictimIndex) {
+		var a = (InterleavedBlock) test1[blockToReduce];
+		var b = (InterleavedBlock) test2[blockToReduce];
+
+		assert a.size() == b.size();
+
+		var redundantIndices = new ArrayList<Integer>();
+		for (int i = 0; i < victimBlockSize; i++) {
+			int test1Index = getVictimIndex.apply(a, i);
+			int test2Index = getVictimIndex.apply(b, i);
+
+			var aWithout = a.without(test1Index);
+			var bWithout = b.without(test2Index);
+
+			var test1Changed = new Block[test1.length];
+			var test2Changed = new Block[test2.length];
+
+			System.arraycopy(test1, 0, test1Changed, 0, test1.length);
+			System.arraycopy(test2, 0, test2Changed, 0, test2.length);
+
+			test1Changed[blockToReduce] = aWithout;
+			test2Changed[blockToReduce] = bWithout;
+
+			var test1Result = run(new TestCase(test1Changed, branches));
+			var test2Result = run(new TestCase(test2Changed, branches));
+
+			if (mismatch(test1Result, test2Result)) {
+				redundantIndices.add(i);
+			}
+		}
+
+		return redundantIndices;
+	}
+
+	private static ExecutionResult run(TestCase tc) {
 		try (var arena = Arena.ofConfined()) {
 			var code = mmap(MemorySegment.NULL, 4096*16L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0)
 					.reinterpret(4096 * 16, arena, ms -> munmap(ms, 4096 * 16L));
+			pkey_mprotect(code, 4096*16L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), SCRATCH_PKEY);
 
-			var buf = code.asByteBuffer();
-			 tc.encode(rng, code.address(), buf::put, R15, 100);
+			var trampoline = Trampoline.create(arena);
+
+			int length = tc.encode(code.address(), trampoline, code, R15, 100);
 
 			var output = execution_result.allocate(arena);
 			CPUState.filledWith(0).toSavedState(execution_result.state(output));
-			do_test(code, buf.position(), output);
+			do_test(SCRATCH_PKEY, trampoline.address(), code, length, output);
 
 			return ExecutionResult.ofStruct(output);
 		}
@@ -130,7 +131,6 @@ public class Minimiser {
 	}
 
 	private static boolean mismatch(ExecutionResult a, ExecutionResult b) {
-		return (a instanceof ExecutionResult.Fault) != (b instanceof ExecutionResult.Fault)
-			   || ((a instanceof ExecutionResult.Success || b instanceof ExecutionResult.Success) && !a.equals(b));
+		return ExecutionResult.interestingMismatch(a, b);
 	}
 }

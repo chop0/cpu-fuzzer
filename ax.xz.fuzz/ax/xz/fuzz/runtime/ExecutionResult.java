@@ -1,33 +1,76 @@
 package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.tester.execution_result;
 import ax.xz.fuzz.tester.fault_details;
 
 import java.lang.foreign.MemorySegment;
 
-import static ax.xz.fuzz.tester.execution_result.*;
-import static ax.xz.fuzz.tester.fault_details.fault_address;
-import static ax.xz.fuzz.tester.fault_details.fault_reason;
 
 public sealed interface ExecutionResult {
+	public static boolean interestingMismatch(ExecutionResult a, ExecutionResult b) {
+		if (a instanceof Success me && b instanceof Success otherSuccess) {
+			return !me.state.zmm().equals(otherSuccess.state.zmm());
+		}
+
+		return false;
+	}
+
 	static ExecutionResult ofStruct(MemorySegment struct) {
-		if (faulted(struct))
-			return Fault.ofFaultDetails(state(struct));
+		if (execution_result.faulted(struct))
+			return Fault.ofFaultDetails(execution_result.state(struct));
 		else
-			return Success.ofSavedState(state(struct));
+			return Success.ofSavedState(execution_result.state(struct));
+	}
+
+	default void toStruct(MemorySegment struct) {
+		switch (this) {
+			case Fault fault -> {
+				execution_result.faulted(struct, true);
+
+				var faultDetails = execution_result.fault(struct);
+				fault.toFaultDetails(faultDetails);
+			}
+			case Success success -> {
+				execution_result.faulted(struct, false);
+
+				var savedState = execution_result.state(struct);
+				success.state().toSavedState(savedState);
+			}
+		}
 	}
 
 	sealed interface Fault extends ExecutionResult {
 		static Fault ofFaultDetails(MemorySegment faultDetails) {
 
-			return switch (fault_reason(faultDetails)) {
-				case 11 -> new Fault.Sigsegv(fault_address(faultDetails).address());
+			return switch (fault_details.fault_reason(faultDetails)) {
+				case 11 -> new Fault.Sigsegv(fault_details.fault_address(faultDetails).address());
 				case 4 ->
-						new Fault.Sigill(fault_address(faultDetails).address(), SigillReason.fromOsValue(fault_details.fault_code(faultDetails)));
-				case 7 -> new Fault.Sigbus(fault_address(faultDetails).address());
-				case 8 -> new Fault.Sigfpe(fault_address(faultDetails).address());
-				case 5 -> new Fault.Sigtrap(fault_address(faultDetails).address());
-				default -> new Fault.Unknown(fault_address(faultDetails).address(), fault_reason(faultDetails));
+						new Fault.Sigill(fault_details.fault_address(faultDetails).address(), SigillReason.fromOsValue(fault_details.fault_code(faultDetails)));
+				case 7 -> new Fault.Sigbus(fault_details.fault_address(faultDetails).address());
+				case 8 -> new Fault.Sigfpe(fault_details.fault_address(faultDetails).address());
+				case 5 -> new Fault.Sigtrap(fault_details.fault_address(faultDetails).address());
+				default -> new Fault.Unknown(fault_details.fault_address(faultDetails).address(), fault_details.fault_reason(faultDetails));
 			};
+		}
+
+		default void toFaultDetails(MemorySegment faultDetails) {
+			int reason = switch (this) {
+				case Sigsegv _ -> 11;
+				case Sigill _ -> 4;
+				case Sigbus _ -> 7;
+				case Sigfpe _ -> 8;
+				case Sigtrap _ -> 5;
+				case Unknown unknown -> unknown.reason();
+			};
+
+			int faultCode = switch (this) {
+				case Sigill sigill -> sigill.reason().osValue;
+				default -> 0;
+			};
+
+			fault_details.fault_reason(faultDetails, reason);
+			fault_details.fault_address(faultDetails, MemorySegment.ofAddress(address()));
+			fault_details.fault_code(faultDetails, faultCode);
 		}
 
 		long address();
