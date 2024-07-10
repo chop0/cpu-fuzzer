@@ -13,20 +13,27 @@ import java.util.Arrays;
 import java.util.Random;
 
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
+import static ax.xz.fuzz.runtime.MemoryUtils.assignPkey;
 import static ax.xz.fuzz.runtime.TestCase.randomBranch;
 import static ax.xz.fuzz.tester.slave_h.*;
 import static com.github.icedland.iced.x86.Register.*;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 public class Tester {
-	static final int SCRATCH_PKEY;
+	public static final int SCRATCH_PKEY;
 
 	static {
 		System.loadLibrary("slave");
 		SCRATCH_PKEY = pkey_alloc(0, 0);
-		if (SCRATCH_PKEY == -1) {
+		if (SCRATCH_PKEY < 0) {
 			throw new RuntimeException("Failed to allocate pkey");
 		}
+
+		if (pkey_set(SCRATCH_PKEY, 0) != 0) {
+			throw new RuntimeException("Failed to set pkey");
+		}
+
+		System.out.println("Scratch pkey: " + SCRATCH_PKEY);
 	}
 
 	private static final int NUM_BLOCKS = System.getenv("NUM_BLOCKS") == null ? 5 : Integer.parseInt(System.getenv("NUM_BLOCKS"));
@@ -47,8 +54,8 @@ public class Tester {
 		this.scratch2 = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x210000 + index * 4096L * 2), 4096, READ, WRITE);
 		this.code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
 
-		pkey_mprotect(scratch1, 4096, PROT_READ() | PROT_WRITE(), SCRATCH_PKEY);
-		pkey_mprotect(scratch2, 4096, PROT_READ() | PROT_WRITE(), SCRATCH_PKEY);
+		assignPkey(scratch1, SCRATCH_PKEY);
+		assignPkey(scratch2, SCRATCH_PKEY);
 
 		this.trampoline = Trampoline.create(arena);
 	}
@@ -158,8 +165,9 @@ public class Tester {
 
 	public static ExecutionResult runBlock(CPUState startState, Block block) throws Block.UnencodeableException {
 		try (var arena = Arena.ofConfined()) {
-			var code = mmap(MemorySegment.NULL, (block.size() + 1) * 15L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0)
-					.reinterpret(4096 * 16, arena, ms -> munmap(ms, (block.size() + 1) * 15L));
+			var code = MemoryUtils.mmap(arena, MemorySegment.NULL, (block.size() + 1) * 15L, READ, WRITE, EXECUTE);
+			assignPkey(code, SCRATCH_PKEY);
+			pkey_set(SCRATCH_PKEY, 0);
 
 			var trampoline = Trampoline.create(arena);
 

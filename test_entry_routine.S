@@ -165,7 +165,15 @@ done:
     xor %ecx, %ecx
     xor %edx, %edx
 
+    nop
+    nop
+    nop
+    nop
     wrpkru
+    nop
+    nop
+    nop
+    nop
 
     movq temp(%rip), %rax
     movq temp2(%rip), %rcx
@@ -177,14 +185,20 @@ done:
     movq %rcx, temp2(%rip)
     movq %rdx, temp3(%rip)
 
-    .byte 0xb8
-    pkru_value_exit: # immediate of the mov eax instruction
-    .long 0
-
+    xor %eax, %eax
     xor %ecx, %ecx
     xor %edx, %edx
 
+    nop
+    nop
+    nop
+
     wrpkru
+    nop
+    nop
+    nop
+    nop
+
     movq temp(%rip), %rax
     movq temp2(%rip), %rcx
     movq temp3(%rip), %rdx

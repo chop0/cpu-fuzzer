@@ -19,7 +19,7 @@ public class Master {
 			Thread.sleep(200); // race
 			int threadCount = System.getenv("THREAD_COUNT") == null ? getCommonPoolParallelism() : Integer.parseInt(System.getenv("THREAD_COUNT"));
 
-			for (int i = 1; i < threadCount - 2; i++) {
+			for (int i = 1; i < threadCount; i++) {
 				int finalI = i;
 				scope.fork(() -> lookForBug(finalI, metrics));
 			}

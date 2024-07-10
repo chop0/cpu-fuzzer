@@ -14,14 +14,21 @@ public class MemoryUtils {
 			protValue |= p.value;
 		}
 
-		var scratch1 = slave_h.mmap(address, size, protValue,
+		var result = slave_h.mmap(address, size, protValue,
 				MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0);
 
-		if (scratch1.address() == MAP_FAILED().address()) {
+		if (result.address() == MAP_FAILED().address()) {
 			throw new RuntimeException("mmap failed");
 		}
 
-		return scratch1.reinterpret(size, arena, ms -> munmap(ms, size));
+		return result.reinterpret(size, arena, ms -> munmap(ms, size));
+	}
+
+	public static MemorySegment assignPkey(MemorySegment address, int pkey) {
+		if (pkey_mprotect(address, address.byteSize(), PROT_READ() | PROT_WRITE() | PROT_EXEC(), pkey) != 0) {
+			throw new RuntimeException("Failed to mprotect scratch1");
+		}
+		return address;
 	}
 
 	public static long alignUp(long value, long alignment) {

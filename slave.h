@@ -36,9 +36,9 @@ struct saved_state {
 };
 
 struct fault_details {
+    void *fault_address;
     int fault_reason;
     int fault_code;
-    void *fault_address;
 };
 
 struct execution_result {

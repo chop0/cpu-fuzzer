@@ -10,8 +10,8 @@ profile: ax.xz.fuzz libslave.so
 
 all: libslave.so ax.xz.fuzz
 
-libslave.so: test_entry_routine.S slave.c memory_mappings.c
-	gcc -g  -Wl,-z,relro,-z,now -fPIC -shared -O3 -o $@ $^
+libslave.so: test_entry_routine.S slave.c segfault_handler.S
+	gcc -g  -Wl,-z,relro,-z,now,-fPIC -fPIC -shared -O0 -o $@ $^
 
 cpu-fuzzer.tar.gz: ax.xz.fuzz libslave.so
 	jlink --module-path $(MODULE_PATH):out --add-modules ax.xz.fuzz --output cpu-fuzzer --launcher ax.xz.fuzz=ax.xz.fuzz/ax.xz.fuzz.runtime.Master --output cpu-fuzzer

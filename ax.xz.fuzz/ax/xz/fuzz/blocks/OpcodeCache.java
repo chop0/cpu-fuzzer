@@ -19,7 +19,10 @@ import java.util.stream.Stream;
 
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.READ;
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.WRITE;
+import static ax.xz.fuzz.runtime.MemoryUtils.assignPkey;
 import static ax.xz.fuzz.runtime.MemoryUtils.mmap;
+import static ax.xz.fuzz.runtime.Tester.SCRATCH_PKEY;
+import static ax.xz.fuzz.tester.slave_h.*;
 import static com.github.icedland.iced.x86.Code.*;
 import static com.github.icedland.iced.x86.Code.XSAVEOPT64_MEM;
 
@@ -111,6 +114,7 @@ record OpcodeCache(int version, Opcode[] opcodes) {
 	private static boolean doesOpcodeWork(Opcode opcode) {
 		try (var arena = Arena.ofConfined()) {
 			var scratch = mmap(arena, MemorySegment.ofAddress(0x4000000), 4096, READ, WRITE);
+			assignPkey(scratch, SCRATCH_PKEY);
 			var rp = ResourcePartition.all(true, scratch);
 			var insn = opcode.configureRandomly(new Random(0), rp);
 

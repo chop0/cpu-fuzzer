@@ -10,6 +10,7 @@ import java.lang.reflect.Array;
 import java.util.*;
 import java.util.function.BiFunction;
 
+import static ax.xz.fuzz.runtime.MemoryUtils.assignPkey;
 import static ax.xz.fuzz.runtime.Tester.SCRATCH_PKEY;
 import static ax.xz.fuzz.tester.slave_h.*;
 import static ax.xz.fuzz.tester.slave_h.do_test;
@@ -98,7 +99,7 @@ public class Minimiser {
 		try (var arena = Arena.ofConfined()) {
 			var code = mmap(MemorySegment.NULL, 4096*16L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0)
 					.reinterpret(4096 * 16, arena, ms -> munmap(ms, 4096 * 16L));
-			pkey_mprotect(code, 4096*16L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), SCRATCH_PKEY);
+			assignPkey(code, SCRATCH_PKEY);
 
 			var trampoline = Trampoline.create(arena);
 
