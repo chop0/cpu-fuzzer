@@ -55,7 +55,7 @@ signal_handler:
 # (right shift by 13)
     mov signal_stack_region@GOTPCREL(%rip), %r11
     sub 0(%r11), %r10
-    shr $13, %r10
+    shr $14, %r10
 
     cmpq $MAX_THREADS, %r10
     jae fucked_stack_address
