@@ -12,6 +12,8 @@
 #
 #             bool taken;
 #             bool active;
+#             bool faulted;
+#             struct fault_details fault_details;
 # } thread_info_t;
 .set FS_BASE_OFFSET, 0
 .set GS_BASE_OFFSET, 8

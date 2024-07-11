@@ -43,21 +43,11 @@ thread_local sigjmp_buf jmpbuf;
  void (*java_signal_handlers[NUM_IGNORED_SIGNALS])(int,  siginfo_t *, void *);
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static void* asm_get_rsp(void) {
-    void *rsp;
-    asm volatile("movq %%rsp, %0" : "=r"(rsp));
-    return rsp;
-}
-
 // use rdfsbase to get fs base
 static void* asm_get_fs_base(void) {
     void *fs_base;
     asm volatile("rdfsbase %0" : "=r"(fs_base));
     return fs_base;
-}
-
-static void asm_set_fs_base(void *fs_base) {
-    asm volatile("wrfsbase %0" : : "r"(fs_base));
 }
 
 static void* asm_get_gs_base(void) {
