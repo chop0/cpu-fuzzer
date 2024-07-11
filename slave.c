@@ -181,9 +181,6 @@ void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t c
         }
     }
 
-#define PKEY_WRITE_DISABLE(pkey) (1 << (2 * pkey + 1))
-#define PKEY_ACCESS_DISABLE(pkey) (1 << (2 * pkey))
-
     void (*trampoline_func)(void *, struct saved_state *) = (void *)trampoline + TRAMPOLINE_START_OFFSET;
 
     active_thread_info[my_thread_idx].faulted = false;
