@@ -33,7 +33,3 @@
 --include-typedef __sigset_t
 --include-function routine_begin
 --include-function routine_end
---include-function pkey_alloc
---include-function pkey_mprotect
---include-function pkey_free
---include-function pkey_set

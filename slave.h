@@ -50,5 +50,5 @@ struct execution_result {
     };
 };
 
-void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *result);
+void do_test( void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *result);
 void test_case_exit(void);

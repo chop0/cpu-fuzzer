@@ -1,6 +1,4 @@
 .global routine_begin
-.global pkru_value_entry
-.global pkru_value_exit
 .global test_case_entry
 .global test_case_exit
 .global routine_end
@@ -152,45 +150,8 @@ done:
     vector_regs_ write_vector_regs_, offset
 .endm
 
-.macro swap_pkru_entry
-    movq %rax, temp(%rip)
-    movq %rcx, temp2(%rip)
-    movq %rdx, temp3(%rip)
-
-    # mov eax, _____ instruction here:
-    .byte 0xb8
-    pkru_value_entry: # immediate of the mov eax instruction
-    .long 0
-
-    xor %ecx, %ecx
-    xor %edx, %edx
-
-    wrpkru
-
-    movq temp(%rip), %rax
-    movq temp2(%rip), %rcx
-    movq temp3(%rip), %rdx
-.endm
-
-.macro clear_pkru
-    movq %rax, temp(%rip)
-    movq %rcx, temp2(%rip)
-    movq %rdx, temp3(%rip)
-
-    xor %eax, %eax
-    xor %ecx, %ecx
-    xor %edx, %edx
-
-    wrpkru
-
-    movq temp(%rip), %rax
-    movq temp2(%rip), %rcx
-    movq temp3(%rip), %rdx
-.endm
-
 .text
 routine_begin:
-
 saved_rsp:
     .quad 0
 addr:
@@ -202,10 +163,6 @@ saved_gs:
 saved_state:
     .quad 0
 temp:
-    .quad 0
-temp2:
-    .quad 0
-temp3:
     .quad 0
 
 
@@ -249,10 +206,8 @@ test_case_entry:
     movq 136(%r15), %rsp
     movq 128(%r15), %r15
 
-    swap_pkru_entry
     jmp *addr(%rip)
 test_case_exit:
-    clear_pkru
 
     movq %r15, temp(%rip)
     movq saved_state(%rip), %r15
@@ -293,5 +248,5 @@ test_case_exit:
     movq %mm7, 2248(%r15)
 
     restore_unclobberable_state
-    call siglongjmp_to_end
+    ret
 routine_end:

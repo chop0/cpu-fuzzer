@@ -7,13 +7,13 @@ import ax.xz.fuzz.tester.execution_result;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Objects;
 import java.util.function.BiFunction;
 
-import static ax.xz.fuzz.runtime.MemoryUtils.assignPkey;
-import static ax.xz.fuzz.runtime.Tester.SCRATCH_PKEY;
 import static ax.xz.fuzz.tester.slave_h.*;
-import static ax.xz.fuzz.tester.slave_h.do_test;
 import static com.github.icedland.iced.x86.Register.R15;
 
 public class Minimiser {
@@ -99,7 +99,6 @@ public class Minimiser {
 		try (var arena = Arena.ofConfined()) {
 			var code = mmap(MemorySegment.NULL, 4096*16L, PROT_READ() | PROT_WRITE() | PROT_EXEC(), MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0)
 					.reinterpret(4096 * 16, arena, ms -> munmap(ms, 4096 * 16L));
-			assignPkey(code, SCRATCH_PKEY);
 
 			var trampoline = Trampoline.create(arena);
 
@@ -107,7 +106,7 @@ public class Minimiser {
 
 			var output = execution_result.allocate(arena);
 			CPUState.filledWith(0).toSavedState(execution_result.state(output));
-			do_test(SCRATCH_PKEY, trampoline.address(), code, length, output);
+			do_test(trampoline.address(), code, length, output);
 
 			return ExecutionResult.ofStruct(output);
 		}

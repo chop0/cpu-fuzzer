@@ -36,19 +36,7 @@ signal_handler:
 # a.  We're currently running a test case, and should jump to the test case's trampoline to perform a context switch
 # b.  We're not currently running a test case, and should jump to Java's signal handler
 
-# Before doing anything, we should clear $pkru and save the current $rsp.  We'll restore it to whatever it's supposed to be later.
     mov %rsp, %r10
-    xchg %rdx, %r8 # save this
-
-    xor %ecx, %ecx
-    xor %edx, %edx
-    rdpkru              # we'll restore this, if we enter the Java signal handler
-    mov %rax, %r9
-
-    xor %eax, %eax # clear for now
-    wrpkru
-
-    xchg %r8, %rdx
     mov %r10, %r15
     push %rdi
     push %rsi
@@ -86,32 +74,30 @@ check_active:
     cmpb $0, ACTIVE_OFFSET(%r10)
     je java_signal_handler
 
-    mov FS_BASE_OFFSET(%r10), %r11
-    mov GS_BASE_OFFSET(%r10), %r12
-    wrfsbase %r11
-    wrgsbase %r12
+    mov FS_BASE_OFFSET(%r10), %r8
+    wrfsbase %r8
+    mov GS_BASE_OFFSET(%r10), %r8
+    wrgsbase %r8
+
     push %r10
-    sub $8, %rsp
     call check_index
-    add $8, %rsp
     pop %r10
 
-    mov test_case_exit@GOTPCREL(%rip), %r11
-    mov routine_begin@GOTPCREL(%rip), %r12
-    sub %r12, %r11
-    add TRAMPOLINE_ADDRESS_OFFSET(%r10), %r11
+    mov test_case_exit@GOTPCREL(%rip), %r9
+    sub routine_begin@GOTPCREL(%rip), %r9
+    add TRAMPOLINE_ADDRESS_OFFSET(%r10), %r9
     mov $1, FAULT_OFFSET(%r10)
 
-    mov 0(%rsi), %r13d
-    mov %r13d, FAULT_REASON_OFFSET(%r10)
+    mov 0(%rsi), %r8d
+    mov %r8d, FAULT_REASON_OFFSET(%r10)
 
-    mov 8(%rsi), %r13d
-    mov %r13d, FAULT_CODE_OFFSET(%r10)
+    mov 8(%rsi), %r8d
+    mov %r8d, FAULT_CODE_OFFSET(%r10)
 
-    mov 16(%rsi), %r13
-    mov %r13, FAULT_ADDRESS_OFFSET(%r10)
+    mov 16(%rsi), %r8
+    mov %r8, FAULT_ADDRESS_OFFSET(%r10)
 
-    call siglongjmp_to_end
+    jmp *%r9
 
 java_signal_handler:
     mov 0(%rsp), %rdi

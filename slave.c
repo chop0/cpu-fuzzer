@@ -29,15 +29,10 @@
 
 #define MAX_THREADS 96
 
-static thread_local sigjmp_buf jmpbuf;
-
-static int signal_stack_pkey, globals_pkey;
-
 void* signal_stack_region;
 
 void test_case_entry(void *code, struct saved_state *saved_state);
 void test_case_exit(void);
-extern uint32_t pkru_value_entry;
 
 thread_local int my_thread_idx = -1;
 
@@ -63,10 +58,6 @@ static void asm_set_gs_base(void *gs_base) {
     asm volatile("wrgsbase %0" : : "r"(gs_base));
 }
 #define assert(x) if (!(x)) { fprintf(stderr, "%s:%d: Assertion failed: %s\n", __FILE__, __LINE__, #x); exit(EXIT_FAILURE); }
-
-    void siglongjmp_to_end(void) {
-    siglongjmp(jmpbuf, 1);
-}
 
 void check_index(int index) {
     assert (index == my_thread_idx);
@@ -96,14 +87,6 @@ void* ucontext_get_rsp(ucontext_t *ctx) {
     return (void *)ctx->uc_mcontext.gregs[REG_RSP];
 }
 
-static void sigusr1_handler(int signal, siginfo_t *si, void *ptr) {
-    ucontext_t *ctx = (ucontext_t *)ptr;
-    void *fpregs = (void *)ctx->uc_mcontext.fpregs;
-    uint32_t *pkru_ptr = &fpregs[2432];
-    pkey_set(globals_pkey, 0);
-    *pkru_ptr = 0;
-}
-
 static void setup_signal_handlers(void) {
     for (int i = 0; i < NUM_IGNORED_SIGNALS; i++) {
         struct sigaction sa = {0};
@@ -124,41 +107,6 @@ static void setup_signal_handlers(void) {
     }
 }
 
-static void setup_sigusr1_handler(void) {
-    struct sigaction sa = {0};
-    sa.sa_flags |= SA_SIGINFO | SA_NODEFER;
-    sa.sa_sigaction = sigusr1_handler;
-    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
-        perror("sigaction");
-        exit(EXIT_FAILURE);
-    }
-}
-
-static void signal_all_threads(int signal) {
-    DIR *dir = opendir("/proc/self/task");
-    if (!dir) {
-        perror("opendir");
-        exit(EXIT_FAILURE);
-    }
-
-    struct dirent *ent;
-    while ((ent = readdir(dir)) != NULL) {
-        if (ent->d_name[0] == '.')
-            continue;
-
-        int tid = atoi(ent->d_name);
-        if (tid == 0)
-            continue;
-
-        if (tgkill(getpid(), tid, signal) == -1) {
-            perror("tgkill");
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    closedir(dir);
-}
-
 static void maybe_cpu_fuzzer_setup(void) {
     static bool initialised = false;
     if (initialised)
@@ -167,41 +115,14 @@ static void maybe_cpu_fuzzer_setup(void) {
     initialised = true;
 
     signal_stack_region = mmap(NULL, 2 * SIGSTKSZ * MAX_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    signal_stack_pkey = 0;
-    globals_pkey = pkey_alloc(0, 0);
-
-    pkey_set(globals_pkey, 0);
-
-    if (signal_stack_pkey < 0) {
-        perror("pkey_alloc");
-        exit(EXIT_FAILURE);
-    }
-
     memory_mappings_t mappings;
     load_process_mappings(&mappings);
 
     for (int i = 0; i < MAX_THREADS; i++) {
         active_thread_info[i].sigstk_address = signal_stack_region + 2 * i * SIGSTKSZ + SIGSTKSZ - 16;
-        active_thread_info[i].jstack_address = signal_stack_region + (2 * i + 1) * SIGSTKSZ + SIGSTKSZ - 16;
     }
-
-    setup_sigusr1_handler();
-    signal_all_threads(SIGUSR1);
 
     setup_signal_handlers();
-
-    for (size_t i = 0; i < mappings.size; i++) {
-        memory_mapping_t mapping = mappings.mappings[i];
-        if (mapping.start > signal_stack_region && mapping.start < (signal_stack_region + 2 * SIGSTKSZ * MAX_THREADS))
-            continue;
-
-        if (mapping.start == 0x7ffffffde000ULL)
-            continue;
-
-        if (mapping.prot & PROT_WRITE) {
-            pkey_mprotect(mapping.start, mapping.length, mapping.prot, globals_pkey);
-        }
-    }
 }
 
 thread_info_t* maybe_allocate_signal_stack(void) {
@@ -236,7 +157,7 @@ thread_info_t* maybe_allocate_signal_stack(void) {
     return &active_thread_info[my_thread_idx];
 }
 
-void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *output) {
+void do_test( void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *output) {
     static bool volatile global_initialized = false;
     if (!global_initialized) {
         puts("Initializing global state");
@@ -256,20 +177,10 @@ void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t c
     active_thread_info[my_thread_idx].active = true;
     active_thread_info[my_thread_idx].trampoline_address = trampoline;
 
-    uint32_t *entry_pkru = (uint32_t *)(trampoline + TRAMPOLINE_PKRU_ENTRY_OFFSET);
-    for (int i = 0; i < 16; i++) {
-        if (i == globals_pkey) {
-            int write_disable_bit = 2 * i + 1;
-            *entry_pkru |= 1 << write_disable_bit;
-        }
-    }
-
     void (*trampoline_func)(void *, struct saved_state *) = (void *)trampoline + TRAMPOLINE_START_OFFSET;
 
     active_thread_info[my_thread_idx].faulted = false;
-   if (sigsetjmp(jmpbuf, 1) == 0) {
-        trampoline_func(code, &output->state);
-    }
+   trampoline_func(code, &output->state);
     output->faulted = active_thread_info[my_thread_idx].faulted;
     if (output->faulted) {
         memcpy(&output->fault, &active_thread_info[my_thread_idx].fault_details, sizeof(output->fault));

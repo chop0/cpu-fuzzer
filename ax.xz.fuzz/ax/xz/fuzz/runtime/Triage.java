@@ -41,7 +41,6 @@ public class Triage {
 			assembler.cmp(r15, 100);
 			assembler.jge(exit);
 			assembler.inc(r15);
-			assembler.mov(mem_ptr(999999999), rax);
 
 			for (var item : blocks) {
 				if (item == null)
@@ -65,12 +64,12 @@ public class Triage {
 	}
 
 	public static void main(String[] args) {
-		var tester = new Tester(0);
+		var tester = new Tester(19);
 		var trampoline = tester.trampoline;
 		var scratch1 = tester.scratch1;
 
 		var branches = new TestCase.Branch[]{
-				new TestCase.Branch(TestCase.BranchType.JE, 1, 1),
+				new TestCase.Branch(TestCase.BranchType.JLE, 0, 1),
 				new TestCase.Branch(TestCase.BranchType.JNE, 5, 2),
 				new TestCase.Branch(TestCase.BranchType.JNE, 4, 1),
 				new TestCase.Branch(TestCase.BranchType.JNS, 5, 2),
@@ -78,22 +77,18 @@ public class Triage {
 		};
 
 		var b1 = block(trampoline, branches,
-				new byte[][]{
-						new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x3a, (byte) 0x15, (byte) 0xe1, (byte) 0xea, },
-						new byte[]{(byte) 0xf3, (byte) 0x0f, (byte) 0x01, (byte) 0xee, },
-
-						new byte[]{(byte) 0x62, (byte) 0xf1, (byte) 0x97, (byte) 0x00, (byte) 0x7b, (byte) 0xe2, },
-
-
-
+				new byte[][]{new byte[]{(byte) 0x67, (byte) 0x44, (byte) 0x0f, (byte) 0xab, (byte) 0x24, (byte) 0x25, (byte) 0xb0, (byte) 0x0c, (byte) 0x11, (byte) 0x00, },
+						new byte[]{(byte) 0x26, (byte) 0x66, (byte) 0x44, (byte) 0x0f, (byte) 0x75, (byte) 0xc8, },
+						new byte[]{(byte) 0x67, (byte) 0xc5, (byte) 0xdd, (byte) 0x66, (byte) 0x04, (byte) 0x25, (byte) 0x40, (byte) 0x06, (byte) 0x21, (byte) 0x00, },
+						new byte[]{(byte) 0xf2, (byte) 0x0f, (byte) 0x38, (byte) 0xf1, (byte) 0xf3, },
 				}
 				);
 
 		var b2 = block(trampoline, branches,
-				new byte[][]{new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x3a, (byte) 0x15, (byte) 0xe1, (byte) 0xea, },
-						new byte[]{(byte) 0x62, (byte) 0xf1, (byte) 0x97, (byte) 0x00, (byte) 0x7b, (byte) 0xe2, },
-						new byte[]{(byte) 0xf3, (byte) 0x0f, (byte) 0x01, (byte) 0xee, },
-					
+				new byte[][]{new byte[]{(byte) 0x67, (byte) 0x44, (byte) 0x0f, (byte) 0xab, (byte) 0x24, (byte) 0x25, (byte) 0xb0, (byte) 0x0c, (byte) 0x11, (byte) 0x00, },
+						new byte[]{(byte) 0x26, (byte) 0x66, (byte) 0x44, (byte) 0x0f, (byte) 0x75, (byte) 0xc8, },
+						new byte[]{(byte) 0x67, (byte) 0xc5, (byte) 0xdd, (byte) 0x66, (byte) 0x04, (byte) 0x25, (byte) 0x40, (byte) 0x06, (byte) 0x21, (byte) 0x00, },
+						new byte[]{(byte) 0xf2, (byte) 0x0f, (byte) 0x38, (byte) 0xf1, (byte) 0xf3, },
 				}
 				);
 

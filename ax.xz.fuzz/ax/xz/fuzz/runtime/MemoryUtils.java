@@ -24,13 +24,6 @@ public class MemoryUtils {
 		return result.reinterpret(size, arena, ms -> munmap(ms, size));
 	}
 
-	public static MemorySegment assignPkey(MemorySegment address, int pkey) {
-		if (pkey_mprotect(address, address.byteSize(), PROT_READ() | PROT_WRITE() | PROT_EXEC(), pkey) != 0) {
-			throw new RuntimeException("Failed to mprotect scratch1");
-		}
-		return address;
-	}
-
 	public static long alignUp(long value, long alignment) {
 		return (value + alignment - 1) & ~(alignment - 1);
 	}
