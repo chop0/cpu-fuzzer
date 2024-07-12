@@ -1,4 +1,4 @@
-FROM openjdk:22-bookworm
+FROM --platform=linux/amd64 openjdk:22-bookworm
 
 RUN wget https://download.java.net/java/early_access/jextract/22/5/openjdk-22-jextract+5-33_linux-x64_bin.tar.gz -O /tmp/jextract.tar.gz
 RUN tar -xzf /tmp/jextract.tar.gz -C /tmp

@@ -58,15 +58,31 @@ signal_handler:
     mov signal_stack_region@GOTPCREL(%rip), %r11
     sub 0(%r11), %r10
     shr $14, %r10
+    mov %r10, %rdi
 
     cmpq $MAX_THREADS, %r10
-    jae fucked_stack_address
+    jae weird_stack_address
 
     # compute offset in active_thread_info
+valid_stack_address:
     imul $THREAD_INFO_SIZE, %r10, %r10
     mov active_thread_info@GOTPCREL(%rip), %r11
     add %r11, %r10
+    jmp check_active
 
+weird_stack_address: # our stack address isn't in the region we allocated for it.  first, try seeing if the stack hasn't been setup for this thread yet
+    push %rdi
+    push %rsi
+    push %rdx
+    call maybe_allocate_signal_stack
+    test %rax, %rax
+    jz fucked_stack_address # maybe_alloate_signal_stack returned NULL, indicating that the stack already has been allocated for this thread -- something has gone terribly wrong
+    mov %rax, %r10
+    pop %rdx
+    pop %rsi
+    pop %rdi
+
+check_active:
     cmpb $0, ACTIVE_OFFSET(%r10)
     je java_signal_handler
 
@@ -74,6 +90,11 @@ signal_handler:
     mov GS_BASE_OFFSET(%r10), %r12
     wrfsbase %r11
     wrgsbase %r12
+    push %r10
+    sub $8, %rsp
+    call check_index
+    add $8, %rsp
+    pop %r10
 
     mov test_case_exit@GOTPCREL(%rip), %r11
     mov routine_begin@GOTPCREL(%rip), %r12
@@ -90,13 +111,16 @@ signal_handler:
     mov 16(%rsi), %r13
     mov %r13, FAULT_ADDRESS_OFFSET(%r10)
 
-    jmp %r11
+    call siglongjmp_to_end
 
 java_signal_handler:
+    mov 0(%rsp), %rdi
+    call ucontext_get_rsp
+
     pop %rdx
     pop %rsi
     pop %rdi
-    mov JSTACK_ADDRESS_OFFSET(%r10), %rsp
+    mov %rax, %rsp
 
     mov ignored_signals@GOTPCREL(%rip), %rbx
     xor %rcx, %rcx

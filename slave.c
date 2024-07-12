@@ -13,6 +13,9 @@
 #include <sys/mman.h>
 #include <stdbool.h>
 #include <fenv.h>
+#include <sys/types.h>
+#include <dirent.h>
+
 
 #include <pthread.h>
 #include <threads.h>
@@ -26,7 +29,9 @@
 
 #define MAX_THREADS 96
 
-static int signal_stack_pkey;
+static thread_local sigjmp_buf jmpbuf;
+
+static int signal_stack_pkey, globals_pkey;
 
 void* signal_stack_region;
 
@@ -35,8 +40,6 @@ void test_case_exit(void);
 extern uint32_t pkru_value_entry;
 
 thread_local int my_thread_idx = -1;
-
-thread_local sigjmp_buf jmpbuf;
 
  int ignored_signals[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP };
 #define NUM_IGNORED_SIGNALS (sizeof(ignored_signals) / sizeof(ignored_signals[0]))
@@ -59,9 +62,16 @@ static void* asm_get_gs_base(void) {
 static void asm_set_gs_base(void *gs_base) {
     asm volatile("wrgsbase %0" : : "r"(gs_base));
 }
-
-
 #define assert(x) if (!(x)) { fprintf(stderr, "%s:%d: Assertion failed: %s\n", __FILE__, __LINE__, #x); exit(EXIT_FAILURE); }
+
+    void siglongjmp_to_end(void) {
+    siglongjmp(jmpbuf, 1);
+}
+
+void check_index(int index) {
+    assert (index == my_thread_idx);
+}
+
 typedef  struct {
             void *fs_base;
             void *gs_base;
@@ -81,6 +91,18 @@ thread_info_t volatile active_thread_info [MAX_THREADS] = {0};
 
 
 void signal_handler(int signal, siginfo_t *si, void *ptr);
+
+void* ucontext_get_rsp(ucontext_t *ctx) {
+    return (void *)ctx->uc_mcontext.gregs[REG_RSP];
+}
+
+static void sigusr1_handler(int signal, siginfo_t *si, void *ptr) {
+    ucontext_t *ctx = (ucontext_t *)ptr;
+    void *fpregs = (void *)ctx->uc_mcontext.fpregs;
+    uint32_t *pkru_ptr = &fpregs[2432];
+    pkey_set(globals_pkey, 0);
+    *pkru_ptr = 0;
+}
 
 static void setup_signal_handlers(void) {
     for (int i = 0; i < NUM_IGNORED_SIGNALS; i++) {
@@ -102,11 +124,95 @@ static void setup_signal_handlers(void) {
     }
 }
 
-static void allocate_signal_stack(void) {
+static void setup_sigusr1_handler(void) {
+    struct sigaction sa = {0};
+    sa.sa_flags |= SA_SIGINFO | SA_NODEFER;
+    sa.sa_sigaction = sigusr1_handler;
+    if (sigaction(SIGUSR1, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void signal_all_threads(int signal) {
+    DIR *dir = opendir("/proc/self/task");
+    if (!dir) {
+        perror("opendir");
+        exit(EXIT_FAILURE);
+    }
+
+    struct dirent *ent;
+    while ((ent = readdir(dir)) != NULL) {
+        if (ent->d_name[0] == '.')
+            continue;
+
+        int tid = atoi(ent->d_name);
+        if (tid == 0)
+            continue;
+
+        if (tgkill(getpid(), tid, signal) == -1) {
+            perror("tgkill");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    closedir(dir);
+}
+
+static void maybe_cpu_fuzzer_setup(void) {
+    static bool initialised = false;
+    if (initialised)
+        return;
+
+    initialised = true;
+
+    signal_stack_region = mmap(NULL, 2 * SIGSTKSZ * MAX_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    signal_stack_pkey = 0;
+    globals_pkey = pkey_alloc(0, 0);
+
+    pkey_set(globals_pkey, 0);
+
+    if (signal_stack_pkey < 0) {
+        perror("pkey_alloc");
+        exit(EXIT_FAILURE);
+    }
+
+    memory_mappings_t mappings;
+    load_process_mappings(&mappings);
+
+    for (int i = 0; i < MAX_THREADS; i++) {
+        active_thread_info[i].sigstk_address = signal_stack_region + 2 * i * SIGSTKSZ + SIGSTKSZ - 16;
+        active_thread_info[i].jstack_address = signal_stack_region + (2 * i + 1) * SIGSTKSZ + SIGSTKSZ - 16;
+    }
+
+    setup_sigusr1_handler();
+    signal_all_threads(SIGUSR1);
+
+    setup_signal_handlers();
+
+    for (size_t i = 0; i < mappings.size; i++) {
+        memory_mapping_t mapping = mappings.mappings[i];
+        if (mapping.start > signal_stack_region && mapping.start < (signal_stack_region + 2 * SIGSTKSZ * MAX_THREADS))
+            continue;
+
+        if (mapping.start == 0x7ffffffde000ULL)
+            continue;
+
+        if (mapping.prot & PROT_WRITE) {
+            pkey_mprotect(mapping.start, mapping.length, mapping.prot, globals_pkey);
+        }
+    }
+}
+
+thread_info_t* maybe_allocate_signal_stack(void) {
+    assert(asm_get_fs_base());
+
     thread_local static bool thread_init_completed = false;
-    assert(!thread_init_completed);
+    if (thread_init_completed)
+        return NULL;
 
     pthread_mutex_lock(&mutex);
+    maybe_cpu_fuzzer_setup();
     for (int i = 0; i < MAX_THREADS; i++) {
         if (!active_thread_info[i].taken) {
             active_thread_info[i].taken = true;
@@ -127,25 +233,7 @@ static void allocate_signal_stack(void) {
     }
 
     thread_init_completed = true;
-}
-
-static void cpu_fuzzer_setup(void) {
-    signal_stack_region = mmap(NULL, 2 * SIGSTKSZ * MAX_THREADS, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    signal_stack_pkey = pkey_alloc(0, 0);
-
-    if (signal_stack_pkey < 0) {
-        perror("pkey_alloc");
-        exit(EXIT_FAILURE);
-    }
-
-    for (int i = 0; i < MAX_THREADS; i++) {
-        pkey_mprotect(signal_stack_region + 2 * i * SIGSTKSZ, SIGSTKSZ, PROT_READ | PROT_WRITE | PROT_EXEC, signal_stack_pkey);
-        mprotect(signal_stack_region + (2 * i + 1) * SIGSTKSZ, SIGSTKSZ, PROT_READ | PROT_WRITE);
-        active_thread_info[i].sigstk_address = signal_stack_region + 2 * i * SIGSTKSZ;
-        active_thread_info[i].jstack_address = signal_stack_region + (2 * i + 1) * SIGSTKSZ;
-    }
-
-    setup_signal_handlers();
+    return &active_thread_info[my_thread_idx];
 }
 
 void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *output) {
@@ -155,18 +243,13 @@ void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t c
         fflush(stdout);
         pthread_mutex_lock(&mutex);
         if (!global_initialized) {
-            cpu_fuzzer_setup();
+            maybe_cpu_fuzzer_setup();
             global_initialized = true;
         }
         pthread_mutex_unlock(&mutex);
     }
 
-    thread_local static bool initialized = false;
-    if (!initialized) {
-           allocate_signal_stack();
-           initialized = true;
-    }
-
+    maybe_allocate_signal_stack();
 
     active_thread_info[my_thread_idx].fs_base = asm_get_fs_base();
     active_thread_info[my_thread_idx].gs_base = asm_get_gs_base();
@@ -175,7 +258,7 @@ void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t c
 
     uint32_t *entry_pkru = (uint32_t *)(trampoline + TRAMPOLINE_PKRU_ENTRY_OFFSET);
     for (int i = 0; i < 16; i++) {
-        if (i != scratch_pkey && i != signal_stack_pkey) {
+        if (i == globals_pkey) {
             int write_disable_bit = 2 * i + 1;
             *entry_pkru |= 1 << write_disable_bit;
         }
@@ -184,8 +267,7 @@ void do_test(int scratch_pkey, void (*trampoline)(void), uint8_t *code, size_t c
     void (*trampoline_func)(void *, struct saved_state *) = (void *)trampoline + TRAMPOLINE_START_OFFSET;
 
     active_thread_info[my_thread_idx].faulted = false;
-
-    if (sigsetjmp(jmpbuf, 1) == 0) {
+   if (sigsetjmp(jmpbuf, 1) == 0) {
         trampoline_func(code, &output->state);
     }
     output->faulted = active_thread_info[my_thread_idx].faulted;

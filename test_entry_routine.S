@@ -165,15 +165,7 @@ done:
     xor %ecx, %ecx
     xor %edx, %edx
 
-    nop
-    nop
-    nop
-    nop
     wrpkru
-    nop
-    nop
-    nop
-    nop
 
     movq temp(%rip), %rax
     movq temp2(%rip), %rcx
@@ -189,15 +181,7 @@ done:
     xor %ecx, %ecx
     xor %edx, %edx
 
-    nop
-    nop
-    nop
-
     wrpkru
-    nop
-    nop
-    nop
-    nop
 
     movq temp(%rip), %rax
     movq temp2(%rip), %rcx
@@ -267,7 +251,6 @@ test_case_entry:
 
     swap_pkru_entry
     jmp *addr(%rip)
-
 test_case_exit:
     clear_pkru
 
@@ -310,5 +293,5 @@ test_case_exit:
     movq %mm7, 2248(%r15)
 
     restore_unclobberable_state
-    ret
+    call siglongjmp_to_end
 routine_end:

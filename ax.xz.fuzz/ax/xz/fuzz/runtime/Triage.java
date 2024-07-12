@@ -8,7 +8,7 @@ import java.lang.foreign.MemorySegment;
 
 import static ax.xz.fuzz.runtime.TestCase.TEST_CASE_FINISH;
 import static ax.xz.fuzz.tester.slave_h.*;
-import static com.github.icedland.iced.x86.asm.AsmRegisters.r15;
+import static com.github.icedland.iced.x86.asm.AsmRegisters.*;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 public class Triage {
@@ -41,6 +41,7 @@ public class Triage {
 			assembler.cmp(r15, 100);
 			assembler.jge(exit);
 			assembler.inc(r15);
+			assembler.mov(mem_ptr(999999999), rax);
 
 			for (var item : blocks) {
 				if (item == null)
