@@ -9,10 +9,10 @@ import java.util.random.RandomGenerator;
 
 public class MutationFactory {
 	private static final Mutator[] mutators = {
-//			new PrefixAdder(),
-//			new RexAdder(),
-//			new VexAdder(),
-//			new PrefixDuplicator()
+			new PrefixAdder(),
+			new RexAdder(),
+			new VexAdder(),
+			new PrefixDuplicator()
 	};
 
 	public DeferredMutation[] createMutations(Opcode code, Instruction original, ResourcePartition partition, RandomGenerator rng) {

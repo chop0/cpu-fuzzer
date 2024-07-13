@@ -23,7 +23,7 @@ import static ax.xz.fuzz.runtime.MemoryUtils.mmap;
 import static com.github.icedland.iced.x86.Code.*;
 
 record OpcodeCache(int version, Opcode[] opcodes) {
-	private static final Set<Integer> blacklistedOpcodes = Set.of(CLUI, STUI, XGETBV, RDPKRU,WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
+	private static final Set<Integer> blacklistedOpcodes = Set.of(CLZEROD, CLZEROW, CLZEROQ, CLUI, STUI, XGETBV, RDPKRU,WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
 	private static final List<String> disallowedPrefixes = List.of("BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
 
 	private static final int OPCODES_CACHE_VERSION = 1;
@@ -94,7 +94,7 @@ record OpcodeCache(int version, Opcode[] opcodes) {
 			return false;
 
 		var insn = Instruction.create(icedID);
-		if (insn.isStackInstruction() || insn.getFlowControl() != FlowControl.NEXT || insn.isJccShortOrNear())
+		if (insn.isStackInstruction() || insn.isPrivileged() || insn.getFlowControl() != FlowControl.NEXT || insn.isJccShortOrNear())
 			return false;
 
 		if (disallowedPrefixes.stream().anyMatch(name::contains))

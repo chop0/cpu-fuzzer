@@ -38,8 +38,8 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 			Collections.addAll(statusFlags, StatusFlag.values());
 
 		return new ResourcePartition[]{
-				new ResourcePartition(statusFlags, new RegisterSet(lhsRegisters), new MemoryPartition[]{MemoryPartition.of(lhsMemory)}),
-				new ResourcePartition(EnumSet.complementOf(statusFlags), new RegisterSet(rhsRegisters), new MemoryPartition[]{MemoryPartition.of(rhsMemory)})
+				new ResourcePartition(statusFlags, new RegisterSet(lhsRegisters), new MemoryPartition[]{/*MemoryPartition.of(lhsMemory)*/}),
+				new ResourcePartition(EnumSet.complementOf(statusFlags), new RegisterSet(rhsRegisters), new MemoryPartition[]{/*MemoryPartition.of(rhsMemory)*/})
 		};
 	}
 
