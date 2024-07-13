@@ -22,7 +22,12 @@ public class PrefixAdder implements Mutator {
 
 	@Override
 	public boolean appliesTo(Opcode  opcode, Instruction instruction, ResourcePartition rp) {
-		return Arrays.stream(opcode.operands()).noneMatch(op -> op instanceof Operand.Counted);
+		for (Operand op : opcode.operands()) {
+			if (op instanceof Operand.Counted) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	@Override
@@ -59,7 +64,7 @@ public class PrefixAdder implements Mutator {
 			}
 		}
 
-		int addedCount = rng.nextInt(2);
+		int addedCount = rng.nextInt(4);
 		var prefixes = new ArrayList<AddedPrefix>(addedCount);
 
 		for (int i = 0; i < addedCount; i++) {
@@ -86,12 +91,4 @@ public class PrefixAdder implements Mutator {
 		};
 	}
 
-	private boolean isPrefix(byte b) {
-		for (var prefix : PREFIXES) {
-			if (b == prefix)
-				return true;
-		}
-
-		return false;
-	}
 }

@@ -139,7 +139,13 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 	}
 
 	public boolean fulfilledBy(boolean evex, ResourcePartition rp) {
-		return (evex || !prefixes.contains(Prefix.EVEX)) && Arrays.stream(operands).allMatch(n -> n.fulfilledBy(rp));
+		if ((!evex && prefixes.contains(Prefix.EVEX))) return false;
+		for (Operand n : operands) {
+			if (!n.fulfilledBy(rp)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	public Instruction configureRandomly(RandomGenerator random, ResourcePartition rp) {

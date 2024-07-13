@@ -65,7 +65,12 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 	}
 
 	public boolean canFulfil(int requiredSize, int alignment, int addressWidthBytes) {
-		return Arrays.stream(this.allowedMemoryRanges).anyMatch(n -> n.canFulfil(requiredSize, alignment, addressWidthBytes));
+		for (MemoryPartition n : this.allowedMemoryRanges) {
+			if (n.canFulfil(requiredSize, alignment, addressWidthBytes)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public ResourcePartition withAllowedRegisters(RegisterSet allowedRegisters) {

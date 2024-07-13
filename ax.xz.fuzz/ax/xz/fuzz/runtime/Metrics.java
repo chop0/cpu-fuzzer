@@ -3,12 +3,30 @@ package ax.xz.fuzz.runtime;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 
 public class Metrics implements AutoCloseable {
+	private static final VarHandle BRANCHES, FAULTED_SAMPLES, OPCODE_COUNT, SAMPLES, SUCCEEDED_SAMPLES;
+
+	static {
+		try {
+			var lookup = MethodHandles.lookup();
+			BRANCHES = lookup.findVarHandle(Metrics.class, "branches", long.class);
+			FAULTED_SAMPLES = lookup.findVarHandle(Metrics.class, "faultedSamples", long.class);
+			OPCODE_COUNT = lookup.findVarHandle(Metrics.class, "opcodeCount", long.class);
+			SAMPLES = lookup.findVarHandle(Metrics.class, "samples", long.class);
+			SUCCEEDED_SAMPLES = lookup.findVarHandle(Metrics.class, "succeededSamples", long.class);
+		} catch (NoSuchFieldException | IllegalAccessException e) {
+			throw new AssertionError(e);
+		}
+	}
+
 	private final HttpServer server;
 
-	private long opcodeCount, faultedSamples, succeededSamples, samples, branches;
+	private volatile long opcodeCount, faultedSamples, succeededSamples, samples, branches;
 
 	public Metrics() throws IOException {
 		this.server = HttpServer.create(new InetSocketAddress(9100), 10);
@@ -33,23 +51,19 @@ public class Metrics implements AutoCloseable {
 				samples_executed_total{faulted="true"} %d
 				samples_executed_total{faulted="false"} %d
 				branches_executed_total %d
-				""".formatted(opcodeCount, faultedSamples, succeededSamples, branches);
+				""".formatted((long) OPCODE_COUNT.get(this), (long) FAULTED_SAMPLES.get(this), (long) SUCCEEDED_SAMPLES.get(this), (long) BRANCHES.get(this));
 	}
 
 	public synchronized void incNumSamples(boolean faulted) {
-		samples++;
+		SAMPLES.getAndAdd(this, 1);
 		if (faulted)
-			faultedSamples++;
+			FAULTED_SAMPLES.getAndAdd(this, 1);
 		else
-			succeededSamples++;
+			SUCCEEDED_SAMPLES.getAndAdd(this, 1);
 	}
 
-	public synchronized void incrementBranches(long n) {
-		branches += n;
-	}
-
-	public synchronized void setOpcodeCount(long opcodeCount) {
-		this.opcodeCount = opcodeCount;
+	public void incrementBranches(long n) {
+		BRANCHES.getAndAdd(this, n);
 	}
 
 	@Override

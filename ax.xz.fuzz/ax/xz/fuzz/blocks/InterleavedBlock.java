@@ -5,6 +5,7 @@ import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.mutate.DeferredMutation;
 import ax.xz.fuzz.runtime.TestCase;
 import com.github.icedland.iced.x86.Instruction;
+import com.github.icedland.iced.x86.asm.CodeAssembler;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -204,7 +205,7 @@ public class InterleavedBlock implements Block {
 	public String toString() {
 		var sb = new StringBuilder();
 		for (var item : items()) {
-			var bytes = TestCase.encode(item.instruction());
+			var bytes = TestCase.encode(new CodeAssembler(64), item.instruction());
 
 			for (var deferredMutation : item.mutations()) {
 				bytes = deferredMutation.perform(bytes);

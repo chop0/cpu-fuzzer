@@ -91,7 +91,6 @@ public final class RegisterSet {
 	}
 
 	private final BitSet registers;
-	private int[] registersOn;
 
 	public RegisterSet(BitSet registers) {
 		this.registers = registers;
@@ -107,6 +106,10 @@ public final class RegisterSet {
 		bs.and(other.registers);
 
 		return new RegisterSet(bs);
+	}
+
+	public boolean intersects(RegisterSet other) {
+		return registers.intersects(other.registers);
 	}
 
 	public RegisterSet union(RegisterSet other) {
@@ -131,10 +134,7 @@ public final class RegisterSet {
 		if (isEmpty())
 			throw new IllegalStateException("Cannot choose from empty register set");
 
-		if (registersOn == null)
-			this.registersOn = registers.stream().toArray();
-
-		return registersOn[randomGenerator.nextInt(registersOn.length)];
+		return registers.nextSetBit(randomGenerator.nextInt(registers.cardinality()));
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {

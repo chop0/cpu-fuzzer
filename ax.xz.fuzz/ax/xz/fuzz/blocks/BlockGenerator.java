@@ -49,8 +49,6 @@ public class BlockGenerator {
 		for (int i = 0; i < rng.nextInt(	1, MAX_INSTRUCTIONS); i++) {
 			for (;;) {
 				var variant = allOpcodes[rng.nextInt(allOpcodes.length)];
-				if (variant.icedFieldName().toLowerCase().contains("rdpkru"))
-					throw new AssertionError();
 				if (disabled.contains(variant) || !variant.fulfilledBy(true, resourcePartition)) continue;
 
 				var insn = variant.ofRandom(resourcePartition, rng);

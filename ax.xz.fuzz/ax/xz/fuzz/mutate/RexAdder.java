@@ -8,32 +8,17 @@ import com.github.icedland.iced.x86.Instruction;
 import java.util.Arrays;
 import java.util.random.RandomGenerator;
 
+import static ax.xz.fuzz.mutate.Prefixes.isPrefix;
+
 public class RexAdder implements Mutator {
-	private static final byte[] PREFIX_GROUP_1 = {(byte) 0xF0, (byte) 0xF2, (byte) 0xF3};
-	private static final byte[] PREFIX_GROUP_2 = {(byte) 0x2E, (byte) 0x36, (byte) 0x3E, (byte) 0x26, (byte) 0x64, (byte) 0x65};
-	private static final byte[] PREFIX_GROUP_3 = {(byte) 0x66, (byte) 0x67};
-
-	private static final byte[][] PREFIX_GROUPS = {PREFIX_GROUP_1, PREFIX_GROUP_2, PREFIX_GROUP_3};
-
-
-	private boolean isPrefix(byte b) {
-		// rex
-		if ((b & 0xF0) == 0x40)
-			return true;
-
-		for (var group : PREFIX_GROUPS) {
-			for (var prefix : group) {
-				if (b == prefix)
-					return true;
-			}
-		}
-
-		return false;
-	}
-
 	@Override
 	public boolean appliesTo(Opcode code, Instruction instruction, ResourcePartition rp) {
-		return Arrays.stream(code.operands()).noneMatch(op -> op instanceof Operand.Counted);
+		for (Operand op : code.operands()) {
+			if (op instanceof Operand.Counted) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	@Override

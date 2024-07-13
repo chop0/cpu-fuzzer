@@ -4,33 +4,35 @@ import ax.xz.fuzz.blocks.BlockGenerator;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.StructuredTaskScope;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 
 import static java.util.concurrent.ForkJoinPool.getCommonPoolParallelism;
 
 public class Master {
 	public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
-		try (var scope = new StructuredTaskScope.ShutdownOnFailure(); var metrics = new Metrics()) {
+		try (var scope = Executors.newThreadPerTaskExecutor(Thread.ofPlatform().factory()); var metrics = new Metrics()) {
 			metrics.startServer();
-			scope.fork(() -> lookForBug(0, metrics));
-			Thread.sleep(200); // race
+			scope.submit(() -> lookForBug(0, metrics));
+			Thread.sleep(2000); // race
 			int threadCount = System.getenv("THREAD_COUNT") == null ? getCommonPoolParallelism() : Integer.parseInt(System.getenv("THREAD_COUNT"));
 
 			for (int i = 1; i < threadCount; i++) {
 				int finalI = i;
-				scope.fork(() -> lookForBug(finalI, metrics));
+				scope.submit(() -> lookForBug(finalI, metrics));
 			}
 
-			scope.join();
-			scope.throwIfFailed();
+			scope.awaitTermination(1, TimeUnit.DAYS);
+			scope.shutdownNow();
 		}
 	}
 
+	private static final Object printLock = new Object();
+
 	private static int lookForBug(int i, Metrics metrics) throws InterruptedException {
 		try  {
+			synchronized (printLock) {
+				System.out.println("Starting thread " + i);
+			}
 			var tester = new Tester(i);
 
 			while (!Thread.interrupted()) {
@@ -58,6 +60,10 @@ public class Master {
 			return 0;
 		} catch (BlockGenerator.NoPossibilitiesException e) {
 			throw new RuntimeException(e);
+		} finally {
+			synchronized (printLock) {
+				System.out.println("Exiting thread " + i);
+			}
 		}
 	}
 }

@@ -11,6 +11,8 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.SplittableRandom;
+import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
 import static ax.xz.fuzz.runtime.TestCase.randomBranch;
@@ -33,7 +35,7 @@ public class Tester {
 	private final MemorySegment scratch2;
 	private final MemorySegment code;
 
-	private final Random rng = new Random();
+	private final RandomGenerator rng = new SplittableRandom();
 
 	public Tester(int index) {
 		var arena = Arena.ofAuto();

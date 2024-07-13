@@ -27,7 +27,7 @@ public sealed interface Operand {
 				}
 
 				var modes = new ArrayList<Mode>();
-				if (!possibleRegisters.intersection(rp.allowedRegisters()).isEmpty())
+				if (possibleRegisters.intersects(rp.allowedRegisters()))
 					modes.add(Mode.REG);
 
 				if (rp.canFulfil(byteSizeMem(), byteAlignMem(), 4))
@@ -67,7 +67,7 @@ public sealed interface Operand {
 
 			@Override
 			public boolean fulfilledBy(ResourcePartition partition) {
-				return !partition.allowedRegisters().intersection(possibleRegisters()).isEmpty()
+				return partition.allowedRegisters().intersects(possibleRegisters())
 					   || partition.canFulfil(byteSizeMem(), byteAlignMem(), 4)
 					   || partition.canFulfil(byteSizeBroadcast(), byteAlignBroadcast(), 4);
 			}
@@ -97,7 +97,7 @@ public sealed interface Operand {
 				}
 
 				var modes = new ArrayList<Mode>();
-				if (!possibleRegisters.intersection(rp.allowedRegisters()).isEmpty())
+				if (possibleRegisters.intersects(rp.allowedRegisters()))
 					modes.add(Mode.REG);
 				if (rp.canFulfil(byteSizeMem(), byteAlignMem(), 4))
 					modes.add(Mode.MEM);
@@ -128,7 +128,7 @@ public sealed interface Operand {
 
 			@Override
 			public boolean fulfilledBy(ResourcePartition partition) {
-				return !partition.allowedRegisters().intersection(possibleRegisters()).isEmpty()
+				return partition.allowedRegisters().intersects(possibleRegisters())
 					   || partition.canFulfil(byteSizeMem(), byteAlignMem(), 4);
 			}
 		}
@@ -142,7 +142,7 @@ public sealed interface Operand {
 
 			@Override
 			public boolean fulfilledBy(ResourcePartition partition) {
-				return !partition.allowedRegisters().intersection(possibleRegisters()).isEmpty();
+				return partition.allowedRegisters().intersects(possibleRegisters());
 			}
 		}
 
@@ -297,7 +297,7 @@ public sealed interface Operand {
 
 			@Override
 			public boolean fulfilledBy(ResourcePartition partition) {
-				return !partition.allowedRegisters().intersection(RegisterSet.MASK).isEmpty();
+				return partition.allowedRegisters().intersects(RegisterSet.MASK);
 			}
 		}
 
