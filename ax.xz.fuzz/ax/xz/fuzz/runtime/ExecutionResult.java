@@ -9,7 +9,7 @@ import java.lang.foreign.MemorySegment;
 public sealed interface ExecutionResult {
 	public static boolean interestingMismatch(ExecutionResult a, ExecutionResult b) {
 		if (a instanceof Success me && b instanceof Success otherSuccess) {
-			return !me.state.zmm().equals(otherSuccess.state.zmm());
+			return !me.state.equals(otherSuccess.state);
 		}
 
 		return false;

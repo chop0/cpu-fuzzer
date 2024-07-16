@@ -134,7 +134,14 @@ public final class RegisterSet {
 		if (isEmpty())
 			throw new IllegalStateException("Cannot choose from empty register set");
 
-		return registers.nextSetBit(randomGenerator.nextInt(registers.cardinality()));
+		int currentIndex = registers.nextSetBit(0);
+		int bound = randomGenerator.nextInt(registers.cardinality());
+
+		for (int i = 0; i < bound; i++) {
+			currentIndex = registers.nextSetBit(currentIndex + 1);
+		}
+
+		return currentIndex;
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {

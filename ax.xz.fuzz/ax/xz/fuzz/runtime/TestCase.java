@@ -1,12 +1,13 @@
 package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.blocks.Block;
-import com.github.icedland.iced.x86.*;
+import com.github.icedland.iced.x86.ICRegister;
+import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.asm.AsmRegister64;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeAssemblerResult;
 import com.github.icedland.iced.x86.asm.CodeLabel;
-import com.github.icedland.iced.x86.enc.BlockEncoder;
+import com.github.icedland.iced.x86.fmt.gas.GasFormatter;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
@@ -23,7 +24,7 @@ public final class TestCase {
 		System.loadLibrary("slave");
 	}
 
-	public static final MemorySegment TEST_CASE_FINISH = SymbolLookup.loaderLookup().find("test_case_exit").orElseThrow();
+	public static final MemorySegment TEST_CASE_FINISH = SymbolLookup.loaderLookup().find("test_case_exit").orElse(null);
 	private final Block[] blocks;
 	private final Branch[] branches;
 
@@ -113,8 +114,8 @@ public final class TestCase {
 		@Override
 		public String toString() {
 			return """
-					%s %d
-					jmp %d""".formatted(type.name().toLowerCase(), takenIndex, notTakenIndex);
+				%s %d
+				jmp %d""".formatted(type.name().toLowerCase(), takenIndex, notTakenIndex);
 		}
 	}
 
@@ -182,7 +183,7 @@ public final class TestCase {
 		if (obj == null || obj.getClass() != this.getClass()) return false;
 		var that = (TestCase) obj;
 		return Arrays.equals(this.blocks, that.blocks) &&
-			   Arrays.equals(this.branches, that.branches);
+		       Arrays.equals(this.branches, that.branches);
 	}
 
 	@Override

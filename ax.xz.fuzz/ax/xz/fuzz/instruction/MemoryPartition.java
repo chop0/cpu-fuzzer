@@ -1,22 +1,17 @@
 package ax.xz.fuzz.instruction;
 
+import ax.xz.fuzz.runtime.MemoryUtils;
+
 import java.lang.foreign.MemorySegment;
 import java.util.random.RandomGenerator;
+
+import static ax.xz.fuzz.runtime.MemoryUtils.alignUp;
 
 public record MemoryPartition(MemorySegment ms) {
 	public long size() {
 		return ms.byteSize();
 	}
 
-	private static long alignup(long value, long align) {
-		long mask = align - 1;
-		return (value + mask) & ~mask;
-	}
-
-	private static long aligndown(long value, long align) {
-		long mask = align - 1;
-		return value & ~mask;
-	}
 
 	private static boolean fitsIn(long value, int widthBytes) {
 		return widthBytes >= 8 || value < (1L << (widthBytes * 8));
@@ -37,8 +32,8 @@ public record MemoryPartition(MemorySegment ms) {
 
 		long result = (range == 0 ? 0 : r.nextLong(range) )+ ms.address();
 
-		long alignedUp = alignup(result, align);
-		long alignedDown = aligndown(result, align);
+		long alignedUp = alignUp(result, align);
+		long alignedDown = MemoryUtils.aligndown(result, align);
 
 		if (fitsIn(alignedUp, addressWidth) && contains(alignedUp, size))
 			return alignedUp;
@@ -49,8 +44,8 @@ public record MemoryPartition(MemorySegment ms) {
 	}
 
 	public boolean canFulfil(int size, int alignment, int addressWidth) {
-		long alignedUp = alignup(ms.address(), alignment);
-		long alignedDown = aligndown(ms.address(), alignedUp);
+		long alignedUp = alignUp(ms.address(), alignment);
+		long alignedDown = MemoryUtils.aligndown(ms.address(), alignedUp);
 
 		return (fitsIn(alignedUp, addressWidth) && contains(alignedUp, size))
 			   || (fitsIn(alignedDown, addressWidth) && contains(alignedDown, size));

@@ -28,6 +28,11 @@ public class MemoryUtils {
 		return (value + alignment - 1) & ~(alignment - 1);
 	}
 
+	public static long aligndown(long value, long align) {
+		long mask = align - 1;
+		return value & ~mask;
+	}
+
 	public enum Protection {
 		READ(PROT_READ()),
 		WRITE(PROT_WRITE()),

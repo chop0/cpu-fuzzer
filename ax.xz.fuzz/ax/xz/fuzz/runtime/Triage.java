@@ -1,10 +1,13 @@
 package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.instruction.RegisterSet;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeLabel;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.Random;
+import java.util.SplittableRandom;
 
 import static ax.xz.fuzz.runtime.TestCase.TEST_CASE_FINISH;
 import static ax.xz.fuzz.tester.slave_h.*;
@@ -53,6 +56,7 @@ public class Triage {
 
 			branches[i].type().perform.accept(assembler, blockHeaders[branches[i].takenIndex()]);
 			assembler.jmp(blockHeaders[branches[i].notTakenIndex()]);
+			System.out.println("Branches: " + branches[i].type() + " " + branches[i].takenIndex() + " " + branches[i].notTakenIndex());
 		}
 
 		assembler.label(exit);
@@ -69,73 +73,83 @@ public class Triage {
 		var scratch1 = tester.scratch1;
 
 		var branches = new TestCase.Branch[]{
-				new TestCase.Branch(TestCase.BranchType.JGE, 0, 1),
-				new TestCase.Branch(TestCase.BranchType.JNS, 0, 2),
+				new TestCase.Branch(TestCase.BranchType.JGE, 0, 0),
+				new TestCase.Branch(TestCase.BranchType.JNS, 0, 0),
 				new TestCase.Branch(TestCase.BranchType.JNE, 4, 1),
 				new TestCase.Branch(TestCase.BranchType.JNS, 5, 2),
 				new TestCase.Branch(TestCase.BranchType.JNS, 2, 4)
 		};
 
 		var b1 = block(trampoline, branches,
-				new byte[][]{new byte[]{(byte) 0x2e, (byte) 0xc4, (byte) 0xc1, (byte) 0x5d, (byte) 0xe9, (byte) 0xe1, },
-						new byte[]{(byte) 0x36, (byte) 0xc4, (byte) 0xc2, (byte) 0x75, (byte) 0x0a, (byte) 0xf0, },
-						new byte[]{(byte) 0x36, (byte) 0xc4, (byte) 0xc2, (byte) 0x0d, (byte) 0xae, (byte) 0xfe, },
-						new byte[]{(byte) 0x0f, (byte) 0x6f, (byte) 0xff, },
-						new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x03, (byte) 0xc0, },
-						new byte[]{(byte) 0xc5, (byte) 0x19, (byte) 0x62, (byte) 0xff, },
-						new byte[]{(byte) 0x36, (byte) 0xc5, (byte) 0xf9, (byte) 0xf1, (byte) 0xe9, },
-						new byte[]{(byte) 0x80, (byte) 0xd0, (byte) 0xf7, },
-						new byte[]{(byte) 0x2e, (byte) 0xf2, (byte) 0x45, (byte) 0x0f, (byte) 0x12, (byte) 0xe3, },
-				},
-
-				new byte[][]{new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x1e, (byte) 0xf4, },
-						new byte[]{(byte) 0x66, (byte) 0x45, (byte) 0x0f, (byte) 0xd2, (byte) 0xc1, },
-						new byte[]{(byte) 0x66, (byte) 0x44, (byte) 0x0f, (byte) 0x63, (byte) 0xf7, },
-						new byte[]{(byte) 0x41, (byte) 0x41, (byte) 0x0f, (byte) 0xb7, (byte) 0xd5, },
-						new byte[]{(byte) 0xc4, (byte) 0x42, (byte) 0x7d, (byte) 0x1d, (byte) 0xdd, },
-						new byte[]{(byte) 0xc5, (byte) 0x19, (byte) 0xfd, (byte) 0xdf, },
-						new byte[]{(byte) 0xc4, (byte) 0xc1, (byte) 0x1d, (byte) 0xda, (byte) 0xff, },
-						new byte[]{(byte) 0xf3, (byte) 0x44, (byte) 0x0f, (byte) 0x53, (byte) 0xcc, },
-						new byte[]{(byte) 0x66, (byte) 0x41, (byte) 0x0f, (byte) 0xea, (byte) 0xc1, },
-						new byte[]{(byte) 0xc4, (byte) 0x62, (byte) 0x75, (byte) 0x03, (byte) 0xca, },
-						new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0xf4, (byte) 0xeb, },
-						new byte[]{(byte) 0xc5, (byte) 0xd7, (byte) 0x7d, (byte) 0xf4, },
-						new byte[]{(byte) 0x65, (byte) 0xf2, (byte) 0x44, (byte) 0x0f, (byte) 0x5a, (byte) 0xc0, },
-						new byte[]{(byte) 0xc4, (byte) 0xe3, (byte) 0x79, (byte) 0x08, (byte) 0xe1, (byte) 0xa5, },
-						new byte[]{(byte) 0x65, (byte) 0x0f, (byte) 0x38, (byte) 0x05, (byte) 0xeb, },
-				}
-				);
+			new byte[][]{new byte[]{(byte) 0x26, (byte) 0x48, (byte) 0x83, (byte) 0xc0, (byte) 0x85, },
+				new byte[]{(byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0xd5, (byte) 0xb8, (byte) 0xed, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x71, (byte) 0xf7, (byte) 0xc9, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x29, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0x26, (byte) 0x0f, (byte) 0x03, (byte) 0xc0, },
+				new byte[]{(byte) 0xc6, (byte) 0xc1, (byte) 0x50, },
+				new byte[]{(byte) 0x26, (byte) 0x0f, (byte) 0x72, (byte) 0xd5, (byte) 0x93, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0xfd, (byte) 0xa7, (byte) 0xc0, },
+				new byte[]{(byte) 0x26, (byte) 0xf3, (byte) 0x4a, (byte) 0x0f, (byte) 0x1e, (byte) 0xfa, },
+				new byte[]{(byte) 0x26, (byte) 0x26, (byte) 0x89, (byte) 0xc9, },
+				new byte[]{(byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x06, (byte) 0xc0, },
+				new byte[]{(byte) 0x62, (byte) 0xf3, (byte) 0x7d, (byte) 0x08, (byte) 0x22, (byte) 0xc1, (byte) 0x8b, },
+				new byte[]{(byte) 0xc5, (byte) 0xd4, (byte) 0x5c, (byte) 0xed, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0xf6, (byte) 0xc0, },
+				new byte[]{(byte) 0xc5, (byte) 0xfa, (byte) 0x5d, (byte) 0xc0, },
+				new byte[]{(byte) 0x26, (byte) 0xc5, (byte) 0xd5, (byte) 0xfc, (byte) 0xed, },
+				new byte[]{(byte) 0x62, (byte) 0xf1, (byte) 0xd7, (byte) 0x08, (byte) 0x2a, (byte) 0xe8, },
+				new byte[]{(byte) 0xc5, (byte) 0xfb, (byte) 0x12, (byte) 0xc0, },
+				new byte[]{(byte) 0x26, (byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x3d, (byte) 0xc0, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x38, (byte) 0xdc, (byte) 0xed, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0xd1, (byte) 0xbe, (byte) 0xed, },
+				new byte[]{(byte) 0xc4, (byte) 0xe3, (byte) 0x79, (byte) 0x14, (byte) 0xc1, (byte) 0xac, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x38, (byte) 0x05, (byte) 0xed, },
+				new byte[]{(byte) 0x0f, (byte) 0xb7, (byte) 0xc0, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x7d, (byte) 0x30, (byte) 0xed, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x13, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0x66, (byte) 0x13, (byte) 0xc0, },
+				new byte[]{(byte) 0x26, (byte) 0x0f, (byte) 0xd1, (byte) 0xed, },
+				new byte[]{(byte) 0x0f, (byte) 0xd8, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0xd5, (byte) 0x96, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0xc5, (byte) 0xd3, (byte) 0x7d, (byte) 0xed, },
+			}
+			);
 
 		var b2 = block(trampoline, branches,
-				new byte[][]{new byte[]{(byte) 0x2e, (byte) 0xc4, (byte) 0xc1, (byte) 0x5d, (byte) 0xe9, (byte) 0xe1, },
-						new byte[]{(byte) 0x36, (byte) 0xc4, (byte) 0xc2, (byte) 0x0d, (byte) 0xae, (byte) 0xfe, },
-						new byte[]{(byte) 0x0f, (byte) 0x6f, (byte) 0xff, },
-						new byte[]{(byte) 0x36, (byte) 0xc4, (byte) 0xc2, (byte) 0x75, (byte) 0x0a, (byte) 0xf0, },
-						new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x03, (byte) 0xc0, },
-						new byte[]{(byte) 0x36, (byte) 0xc5, (byte) 0xf9, (byte) 0xf1, (byte) 0xe9, },
-						new byte[]{(byte) 0xc5, (byte) 0x19, (byte) 0x62, (byte) 0xff, },
-						new byte[]{(byte) 0x80, (byte) 0xd0, (byte) 0xf7, },
-						new byte[]{(byte) 0x2e, (byte) 0xf2, (byte) 0x45, (byte) 0x0f, (byte) 0x12, (byte) 0xe3, },
-				},
+			new byte[][]{new byte[]{(byte) 0x26, (byte) 0x48, (byte) 0x83, (byte) 0xc0, (byte) 0x85, },
+				new byte[]{(byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0xd5, (byte) 0xb8, (byte) 0xed, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x29, (byte) 0xed, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x71, (byte) 0xf7, (byte) 0xc9, },
+				new byte[]{(byte) 0xc6, (byte) 0xc1, (byte) 0x50, },
+				new byte[]{(byte) 0x26, (byte) 0x26, (byte) 0x0f, (byte) 0x03, (byte) 0xc0, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0xfd, (byte) 0xa7, (byte) 0xc0, },
+				new byte[]{(byte) 0x26, (byte) 0x26, (byte) 0x89, (byte) 0xc9, },
+				new byte[]{(byte) 0x26, (byte) 0x0f, (byte) 0x72, (byte) 0xd5, (byte) 0x93, },
+				new byte[]{(byte) 0x26, (byte) 0xf3, (byte) 0x4a, (byte) 0x0f, (byte) 0x1e, (byte) 0xfa, },
+				new byte[]{(byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x06, (byte) 0xc0, },
+				new byte[]{(byte) 0x62, (byte) 0xf3, (byte) 0x7d, (byte) 0x08, (byte) 0x22, (byte) 0xc1, (byte) 0x8b, },
+				new byte[]{(byte) 0xc5, (byte) 0xd4, (byte) 0x5c, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0xc5, (byte) 0xd5, (byte) 0xfc, (byte) 0xed, },
+				new byte[]{(byte) 0x62, (byte) 0xf1, (byte) 0xd7, (byte) 0x08, (byte) 0x2a, (byte) 0xe8, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x38, (byte) 0xdc, (byte) 0xed, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0xf6, (byte) 0xc0, },
+				new byte[]{(byte) 0xc5, (byte) 0xfa, (byte) 0x5d, (byte) 0xc0, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0xd1, (byte) 0xbe, (byte) 0xed, },
+				new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0x38, (byte) 0x05, (byte) 0xed, },
+				new byte[]{(byte) 0x0f, (byte) 0xb7, (byte) 0xc0, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x7d, (byte) 0x30, (byte) 0xed, },
+				new byte[]{(byte) 0xc5, (byte) 0xfb, (byte) 0x12, (byte) 0xc0, },
+				new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x13, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0x66, (byte) 0x13, (byte) 0xc0, },
+				new byte[]{(byte) 0x26, (byte) 0x0f, (byte) 0xd1, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x3d, (byte) 0xc0, },
+				new byte[]{(byte) 0x0f, (byte) 0xd8, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0xc4, (byte) 0xe2, (byte) 0xd5, (byte) 0x96, (byte) 0xed, },
+				new byte[]{(byte) 0x26, (byte) 0xc5, (byte) 0xd3, (byte) 0x7d, (byte) 0xed, },
+				new byte[]{(byte) 0xc4, (byte) 0xe3, (byte) 0x79, (byte) 0x14, (byte) 0xc1, (byte) 0xac, },
+			}
 
-				new byte[][]{new byte[]{(byte) 0x66, (byte) 0x44, (byte) 0x0f, (byte) 0x63, (byte) 0xf7, },
-						new byte[]{(byte) 0xc4, (byte) 0x42, (byte) 0x7d, (byte) 0x1d, (byte) 0xdd, },
-						new byte[]{(byte) 0xc5, (byte) 0x19, (byte) 0xfd, (byte) 0xdf, },
-						new byte[]{(byte) 0xc4, (byte) 0xc1, (byte) 0x1d, (byte) 0xda, (byte) 0xff, },
-						new byte[]{(byte) 0xc4, (byte) 0xe2, (byte) 0x79, (byte) 0x1e, (byte) 0xf4, },
-						new byte[]{(byte) 0x66, (byte) 0x45, (byte) 0x0f, (byte) 0xd2, (byte) 0xc1, },
-						new byte[]{(byte) 0x41, (byte) 0x41, (byte) 0x0f, (byte) 0xb7, (byte) 0xd5, },
-						new byte[]{(byte) 0xf3, (byte) 0x44, (byte) 0x0f, (byte) 0x53, (byte) 0xcc, },
-						new byte[]{(byte) 0x66, (byte) 0x41, (byte) 0x0f, (byte) 0xea, (byte) 0xc1, },
-						new byte[]{(byte) 0xc4, (byte) 0x62, (byte) 0x75, (byte) 0x03, (byte) 0xca, },
-						new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0xf4, (byte) 0xeb, },
-						new byte[]{(byte) 0xc5, (byte) 0xd7, (byte) 0x7d, (byte) 0xf4, },
-						new byte[]{(byte) 0x65, (byte) 0xf2, (byte) 0x44, (byte) 0x0f, (byte) 0x5a, (byte) 0xc0, },
-						new byte[]{(byte) 0xc4, (byte) 0xe3, (byte) 0x79, (byte) 0x08, (byte) 0xe1, (byte) 0xa5, },
-						new byte[]{(byte) 0x65, (byte) 0x0f, (byte) 0x38, (byte) 0x05, (byte) 0xeb, },
-				}
-
-				);
+			);
 
 		// print b1 and b2 in hex
 		for (var b : b1.toArray(JAVA_BYTE)) {

@@ -12,6 +12,10 @@ import static ax.xz.fuzz.tester.slave_h.routine_end$address;
 public record Trampoline(MemorySegment address) {
 	private static final MemorySegment trampolineCode = routine_begin$address().reinterpret(routine_end$address().address() - routine_begin$address().address());
 
+	public static long byteSize() {
+		return trampolineCode.byteSize();
+	}
+
 	public MemorySegment relocate(MemorySegment functionAddress) {
 		return address.asSlice(functionAddress.address() - routine_begin$address().address());
 	}

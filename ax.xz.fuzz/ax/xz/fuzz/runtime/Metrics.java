@@ -3,7 +3,6 @@ package ax.xz.fuzz.runtime;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
@@ -29,29 +28,38 @@ public class Metrics implements AutoCloseable {
 	private volatile long opcodeCount, faultedSamples, succeededSamples, samples, branches;
 
 	public Metrics() throws IOException {
-		this.server = HttpServer.create(new InetSocketAddress(9100), 10);
+		HttpServer server1;
+		try {
+			server1 = HttpServer.create(new InetSocketAddress(9100), 10);
+		} catch (IOException e) {
+			new IOException("Failed to create server", e).printStackTrace();
+			server1 = null;
+		}
+		this.server = server1;
 	}
 
 	public Metrics startServer() {
-		server.createContext("/", ex -> {
-			var response = getMetrics();
-			ex.sendResponseHeaders(200, response.length());
-			ex.getResponseBody().write(response.getBytes());
-			ex.getResponseBody().close();
-			ex.close();
-		});
-		server.start();
+		if (server != null) {
+			server.createContext("/", ex -> {
+				var response = getMetrics();
+				ex.sendResponseHeaders(200, response.length());
+				ex.getResponseBody().write(response.getBytes());
+				ex.getResponseBody().close();
+				ex.close();
+			});
+			server.start();
+		}
 
 		return this;
 	}
 
 	private String getMetrics() {
 		return """
-				opcode_count %d
-				samples_executed_total{faulted="true"} %d
-				samples_executed_total{faulted="false"} %d
-				branches_executed_total %d
-				""".formatted((long) OPCODE_COUNT.get(this), (long) FAULTED_SAMPLES.get(this), (long) SUCCEEDED_SAMPLES.get(this), (long) BRANCHES.get(this));
+			opcode_count %d
+			samples_executed_total{faulted="true"} %d
+			samples_executed_total{faulted="false"} %d
+			branches_executed_total %d
+			""".formatted((long) OPCODE_COUNT.get(this), (long) FAULTED_SAMPLES.get(this), (long) SUCCEEDED_SAMPLES.get(this), (long) BRANCHES.get(this));
 	}
 
 	public synchronized void incNumSamples(boolean faulted) {

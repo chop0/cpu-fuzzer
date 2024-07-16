@@ -23,10 +23,10 @@ import static ax.xz.fuzz.runtime.MemoryUtils.mmap;
 import static com.github.icedland.iced.x86.Code.*;
 
 record OpcodeCache(int version, Opcode[] opcodes) {
-	private static final Set<Integer> blacklistedOpcodes = Set.of(CLZEROD, CLZEROW, CLZEROQ, CLUI, STUI, XGETBV, RDPKRU,WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
+	private static final Set<Integer> blacklistedOpcodes = Set.of(LSL_R16_RM16, LSL_R32_R32M16, LSL_R64_R64M16, CLZEROD, CLZEROW, CLZEROQ, CLUI, STUI, XGETBV, RDPKRU,WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
 	private static final List<String> disallowedPrefixes = List.of("BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
 
-	private static final int OPCODES_CACHE_VERSION = 1;
+	private static final int OPCODES_CACHE_VERSION = blacklistedOpcodes.hashCode() ^ disallowedPrefixes.hashCode();
 	private static final Path OPCODES_CACHE_PATH = Path.of("opcodes.json");
 
 	public static Opcode[] loadOpcodes() {
