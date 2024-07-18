@@ -9,8 +9,9 @@
 #define HEXFMT8 "%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx"
 #define HEXFMT32  HEXFMT8 HEXFMT8 HEXFMT8 HEXFMT8
 
-#define HEXARGS8(x, offset) (x)[offset], (x)[offset+1], (x)[offset+2], (x)[offset+3], (x)[offset+4], (x)[offset+5], (x)[offset+6], (x)[offset+7]
-#define HEXARGS32(x, offset) HEXARGS8(x, offset), HEXARGS8(x, offset+8), HEXARGS8(x, offset+16), HEXARGS8(x, offset+24)
+#define XMMARGS(x, offset) (((uint8_t*)&x))[(offset)]
+#define HEXARGS8(x, offset) XMMARGS(x, (offset)), XMMARGS(x, (offset)+1), XMMARGS(x, (offset)+2), XMMARGS(x, (offset)+3), XMMARGS(x, (offset)+4), XMMARGS(x, (offset)+5), XMMARGS(x, (offset)+6), XMMARGS(x, (offset)+7)
+#define HEXARGS32(x, offset) HEXARGS8(x, (offset)), HEXARGS8(x, (offset)+8), HEXARGS8(x, (offset)+16), HEXARGS8(x, (offset)+24)
 
 static uint8_t big_buffer[8192] = { 0 };
 
@@ -25,11 +26,11 @@ static uint8_t *scratch1 = big_buffer, *scratch2 = big_buffer + 4096;
 	V("vmovlps (%1), %%xmm16, %%xmm24") \
 	V("vmovhpd (%1), %%xmm0, %%xmm8")
 
-static void reproducer_poc(bool with_fences, uint8_t const *input, uint8_t *output) {
+static __m128 reproducer_poc(bool with_fences, __m128 input) {
 	asm (
-		"vmovups (%0), %%xmm16\n"
+		"vmovups %0, %%xmm16\n"
 		"vpxord %%xmm24, %%xmm24, %%xmm24\n"
-		: : "r"(input)
+		: : "m"(input)
 		: "xmm16", "xmm24"
 	);
 
@@ -51,37 +52,37 @@ static void reproducer_poc(bool with_fences, uint8_t const *input, uint8_t *outp
 		#undef UNFENCED
 	}
 
+	__m128 output;
 	asm (
 		"vmovups %%xmm24, (%0)\n"
-		: : "r"(output)
+		: : "r"(&output)
 		: "memory"
 	);
+
+	return output;
 }
 
-static void reproducer_intrinsics(uint8_t const *input, uint8_t *output) {
-	__m64 zero = { 0 };
+static __m128 reproducer_intrinsics(__m128 input) {
+	__m128 zero = { 0 };
+	__m128 result = _mm_loadl_pi(input, &zero);
 
-	__m128 a = _mm_loadu_ps((float const *)input);
-	__m128 result = _mm_loadl_pi(a, &zero);
-
-	_mm_storeu_ps((float *)output, result);
+	return result;
 }
 
 int main() {
 	printf("%hhx%hhx\n", *scratch1, *scratch2);
 	srand(0);
 
-	uint8_t test_input[64];
+	uint8_t test_input[32];
 	for (int i = 0; i < sizeof(test_input); i++) {
 		test_input[i] = rand() & 0xff;
 	}
+	__m128 input = *((__m128*) test_input);
 
 	for (int r = 0; r < 100; r++) {
-		uint8_t intrinsics_result[32], broken_result[32], serialized_result[32];
-
-		reproducer_intrinsics(test_input, intrinsics_result);
-		reproducer_poc(true, test_input, serialized_result);
-		reproducer_poc(false, test_input, broken_result);
+		__m128 intrinsics_result = reproducer_intrinsics(input);
+		__m128 serialized_result = reproducer_poc(true, input);
+		__m128 broken_result = reproducer_poc(false, input);
 
 		printf(
 			"attempt %d results:\n"
@@ -92,7 +93,7 @@ int main() {
 		r, HEXARGS32(test_input, 0), HEXARGS32(intrinsics_result, 0), HEXARGS32(serialized_result, 0), HEXARGS32(broken_result, 0)
 		);
 
-		bool correct_result = memcmp(broken_result, intrinsics_result, 32) == 0;
+		bool correct_result = memcmp(&broken_result, &intrinsics_result, 32) == 0;
 		if (!correct_result) {
 			printf("attempt %d SUCCESS: found an attempt where xmm24 was NOT what we expected\n", r);
 			return 0;
