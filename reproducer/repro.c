@@ -16,40 +16,55 @@ static uint8_t big_buffer[8192] = { 0 };
 
 static void *scratch1 = big_buffer, *scratch2 = big_buffer + 4096;
 
-static void reproducer_code(uint8_t const *initial_xmm16, uint8_t const *initial_xmm24, uint8_t *final_xmm24) {
+#define TEST_INSTRUCTIONS(V) \
+	V("or %%r11, %%r11") \
+	V("vhsubpd (%0), %%xmm0, %%xmm0") \
+	V("cvtps2dq (%1), %%xmm0") \
+	V("vrsqrtps (%1), %%xmm0") \
+	V("vfmsub231ss (%1), %%xmm0, %%xmm0") \
+	V("vmovlps (%1), %%xmm16, %%xmm24") \
+	V("vmovhpd (%1), %%xmm0, %%xmm8")
+
+static void reproducer_poc(bool with_fences, uint8_t const *input, uint8_t *output) {
 	asm (
 		"vmovups (%0), %%xmm16\n"
-		"vmovups (%1), %%xmm24\n"
-		: : "r"(initial_xmm16), "r"(initial_xmm24)
+		"vpxord %%xmm24, %%xmm24, %%xmm24\n"
+		: : "r"(input)
 		: "xmm16", "xmm24"
 	);
 
-	asm (
-		"or %%r11, %%r11\n"
-		"vhsubpd (%0), %%xmm0, %%xmm0\n"
-		"cvtps2dq (%1), %%xmm0\n"
-		"vrsqrtps (%1), %%xmm0\n"
-		"vfmsub231ss (%1), %%xmm0, %%xmm0\n"
-		"vmovlps (%1), %%xmm16, %%xmm24\n"
-		"vmovhpd (%1), %%xmm0, %%xmm8\n"
-		: : "r"(scratch1), "r"(scratch2)
-		: "xmm0", "xmm8", "xmm16", "xmm24"
-	);
+	if (with_fences) {
+		#define FENCED(x) x "\nmfence\n"
+		asm (
+			TEST_INSTRUCTIONS(FENCED)
+			: : "r"(scratch1), "r"(scratch2)
+			: "xmm0", "xmm8", "xmm16", "xmm24"
+		);
+		#undef FENCED
+	} else {
+		#define UNFENCED(x) x "\n"
+		asm (
+			TEST_INSTRUCTIONS(UNFENCED)
+			: : "r"(scratch1), "r"(scratch2)
+			: "xmm0", "xmm8", "xmm16", "xmm24"
+		);
+		#undef UNFENCED
+	}
 
 	asm (
 		"vmovups %%xmm24, (%0)\n"
-		: : "r"(final_xmm24)
+		: : "r"(output)
 		: "memory"
 	);
 }
 
-static void reproducer_good(uint8_t const *initial_xmm16, uint8_t const *initial_xmm24, uint8_t *final_xmm24) {
+static void reproducer_intrinsics(uint8_t const *input, uint8_t *output) {
 	__m64 zero = { 0 };
 
-	__m128 a = _mm_loadu_ps((float const *)initial_xmm16);
+	__m128 a = _mm_loadu_ps((float const *)input);
 	__m128 result = _mm_loadl_pi(a, &zero);
 
-	_mm_storeu_ps((float *)final_xmm24, result);
+	_mm_storeu_ps((float *)output, result);
 }
 
 int main() {
@@ -61,25 +76,22 @@ int main() {
 	}
 
 	for (int r = 0; r < 100; r++) {
-		uint8_t initial_xmm16[32] = { 0 };
-		uint8_t initial_xmm24[32] = { 0 };
-		memcpy(initial_xmm16, test_input, 64);
+		uint8_t intrinsics_result[32], test_result[32], serialized_result[32];
 
-		uint8_t good_result[32], test_result[32];
-
-		reproducer_good(initial_xmm16, initial_xmm24, good_result);
-		reproducer_code(initial_xmm16, initial_xmm24, test_result);
+		reproducer_intrinsics(test_input, intrinsics_result);
+		reproducer_poc(true, test_input, serialized_result);
+		reproducer_poc(false, test_input, test_result);
 
 		printf(
 			"attempt %d results:\n"
-			"\tinitial xmm16: " HEXFMT32 "\n"
-			"\tinitial xmm24: " HEXFMT32 "\n"
-			"\texpected result: " HEXFMT32 "\n"
-			"\tactual result:   " HEXFMT32 "\n",
-		r, HEXARGS32(initial_xmm16, 0),HEXARGS32(initial_xmm24, 0), HEXARGS32(good_result, 0), HEXARGS32(test_result, 0)
+			"\tinput to function:\t" HEXFMT32 "\n"
+			"\tintrinsics result:\t" HEXFMT32 "\n"
+			"\tpoc w/ fences result:\t" HEXFMT32 "\n"
+			"\tpoc w/o fences result:\t" HEXFMT32 "\n",
+		r, HEXARGS32(test_input, 0), HEXARGS32(intrinsics_result, 0), HEXARGS32(serialized_result, 0), HEXARGS32(test_result, 0)
 		);
 
-		bool correct_result = memcmp(test_result, good_result, 32) == 0;
+		bool correct_result = memcmp(test_result, intrinsics_result, 32) == 0;
 		if (!correct_result) {
 			printf("attempt %d SUCCESS: found an attempt where xmm24 was NOT what we expected\n", r);
 			return 0;
