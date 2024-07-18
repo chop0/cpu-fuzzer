@@ -9,18 +9,16 @@
 
 #define HEXFMT8 "%02x%02x%02x%02x%02x%02x%02x%02x"
 #define HEXFMT32  HEXFMT8 HEXFMT8 HEXFMT8 HEXFMT8
-#define HEXFMT64  HEXFMT32 HEXFMT32
 
 #define HEXARGS8(x, offset) (x)[offset], (x)[offset+1], (x)[offset+2], (x)[offset+3], (x)[offset+4], (x)[offset+5], (x)[offset+6], (x)[offset+7]
 #define HEXARGS32(x, offset) HEXARGS8(x, offset), HEXARGS8(x, offset+8), HEXARGS8(x, offset+16), HEXARGS8(x, offset+24)
-#define HEXARGS64(x, offset) HEXARGS32(x, offset), HEXARGS32(x, offset+32)
 
-static void reproducer_code(uint8_t const *initial_zmm19, uint8_t const *initial_zmm24, uint8_t *final_zmm19, uint8_t *final_zmm24) {
+static void reproducer_code(uint8_t const *initial_xmm19, uint8_t const *initial_xmm24, uint8_t *final_xmm19, uint8_t *final_xmm24) {
 	asm (
-		"vmovups (%0), %%zmm19\n"
-		"vmovups (%1), %%zmm24\n"
-		: : "r"(initial_zmm19), "r"(initial_zmm24)
-		: "zmm19", "zmm24"
+		"vmovups (%0), %%xmm19\n"
+		"vmovups (%1), %%xmm24\n"
+		: : "r"(initial_xmm19), "r"(initial_xmm24)
+		: "xmm19", "xmm24"
 	);
 
 	asm (
@@ -35,9 +33,9 @@ static void reproducer_code(uint8_t const *initial_zmm19, uint8_t const *initial
 	);
 
 	asm (
-		"vmovups %%zmm19, (%0)\n"
-		"vmovups %%zmm24, (%1)\n"
-		: : "r"(final_zmm19), "r"(final_zmm24)
+		"vmovups %%xmm19, (%0)\n"
+		"vmovups %%xmm24, (%1)\n"
+		: : "r"(final_xmm19), "r"(final_xmm24)
 		: "memory"
 	);
 }
@@ -67,34 +65,34 @@ int main() {
 	bool found_non_zero = false;
 
 	for (int r = 0; r < 100; r++) {
-		uint8_t initial_zmm19[64] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0 };
-		uint8_t initial_zmm24[64] = { 0 };
+		uint8_t initial_xmm19[32] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0 };
+		uint8_t initial_xmm24[32] = { 0 };
 
-		uint8_t final_zmm19[64];
-		uint8_t final_zmm24[64];
+		uint8_t final_xmm19[32];
+		uint8_t final_xmm24[32];
 
-		memcpy(&final_zmm19, initial_zmm19, 64);
-		memcpy(&final_zmm24, initial_zmm24, 64);
+		memcpy(&final_xmm19, initial_xmm19, 32);
+		memcpy(&final_xmm24, initial_xmm24, 32);
 
-		reproducer_code(initial_zmm19, initial_zmm24, final_zmm19, final_zmm24);
+		reproducer_code(initial_xmm19, initial_xmm24, final_xmm19, final_xmm24);
 
 		printf(
 			"attempt %d results:\n"
-			"\tinitial zmm19: " HEXFMT64 "\n"
-			"\tfinal zmm19:   " HEXFMT64 "\n"
-			"\tinitial zmm24: " HEXFMT64 "\n"
-			"\tfinal zmm24:   " HEXFMT64 "\n",
-		r, HEXARGS64(initial_zmm19, 0), HEXARGS64(final_zmm19, 0), HEXARGS64(initial_zmm24, 0), HEXARGS64(final_zmm24, 0)
+			"\tinitial xmm19: " HEXFMT32 "\n"
+			"\tfinal xmm19:   " HEXFMT32 "\n"
+			"\tinitial xmm24: " HEXFMT32 "\n"
+			"\tfinal xmm24:   " HEXFMT32 "\n",
+		r, HEXARGS32(initial_xmm19, 0), HEXARGS32(final_xmm19, 0), HEXARGS32(initial_xmm24, 0), HEXARGS32(final_xmm24, 0)
 		);
 
-		uint8_t zeros[64] = { 0 };
-		bool all_zeros = memcmp(final_zmm24, zeros, 64) == 0;
+		uint8_t zeros[32] = { 0 };
+		bool all_zeros = memcmp(final_xmm24, zeros, 32) == 0;
 
 		found_all_zeros |= all_zeros;
 		found_non_zero |= !all_zeros;
 
 		if (found_all_zeros && found_non_zero) {
-			printf("SUCCESS: found 1 attempt where zmm24 was all zeros and 1 attempt where it was not\n");
+			printf("SUCCESS: found 1 attempt where xmm24 was all zeros and 1 attempt where it was not\n");
 			return 0;
 		}
 	}
