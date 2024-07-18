@@ -1,8 +1,11 @@
 package ax.xz.fuzz.instruction;
 
 
+import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
+
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.random.RandomGenerator;
 import java.util.stream.Collector;
@@ -12,7 +15,7 @@ import java.util.stream.IntStream;
 import static com.github.icedland.iced.x86.Register.*;
 import static java.util.stream.IntStream.rangeClosed;
 
-public final class RegisterSet {
+public final class RegisterSet implements Iterable<Integer> {
 	public static RegisterSet GPB = RegisterSet.of(rangeClosed(AL, R15L).toArray());
 	public static RegisterSet GPW = RegisterSet.of(rangeClosed(AX, R15W).toArray());
 	public static RegisterSet GPD = RegisterSet.of(rangeClosed(EAX, R15D).toArray());
@@ -130,7 +133,7 @@ public final class RegisterSet {
 		return registers.isEmpty();
 	}
 
-	public int choose(RandomGenerator randomGenerator) {
+	public int select(RandomGenerator randomGenerator) {
 		if (isEmpty())
 			throw new IllegalStateException("Cannot choose from empty register set");
 
@@ -142,6 +145,18 @@ public final class RegisterSet {
 		}
 
 		return currentIndex;
+	}
+
+	public void reverse(ReverseRandomGenerator random, int outcome) {
+		int currentIndex = registers.nextSetBit(0);
+		int bound = 0;
+
+		while (currentIndex != outcome) {
+			currentIndex = registers.nextSetBit(currentIndex + 1);
+			bound++;
+		}
+
+		random.pushInt(bound);
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {
@@ -237,6 +252,10 @@ public final class RegisterSet {
 			{ XMM31, YMM31, ZMM31},
 	};
 
+	public static final RegisterSet[] bankSets = Arrays.stream(banks)
+			.map(RegisterSet::of)
+			.toArray(RegisterSet[]::new);
+
 
 	public static int[] getAssociatedRegisters(int register) {
 		for (int[] bank : banks) {
@@ -252,5 +271,10 @@ public final class RegisterSet {
 
 	public static RegisterSet getAssociatedRegisterSet(int register) {
 		return RegisterSet.of(getAssociatedRegisters(register));
+	}
+
+	@Override
+	public Iterator<Integer> iterator() {
+		return registers.stream().iterator();
 	}
 }

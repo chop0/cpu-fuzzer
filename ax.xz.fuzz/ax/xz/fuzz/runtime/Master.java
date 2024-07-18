@@ -1,6 +1,6 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.blocks.BlockGenerator;
+import ax.xz.fuzz.blocks.NoPossibilitiesException;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -57,9 +57,10 @@ public class Master {
 				}
 			}
 
-			return 0;
-		} catch (BlockGenerator.NoPossibilitiesException e) {
-			throw new RuntimeException(e);
+			throw new InterruptedException();
+		} catch (Throwable e) {
+			e.printStackTrace();
+			return 1;
 		} finally {
 			synchronized (printLock) {
 				System.out.println("Exiting thread " + i);

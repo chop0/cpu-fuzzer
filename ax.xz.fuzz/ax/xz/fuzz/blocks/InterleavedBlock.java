@@ -1,10 +1,6 @@
 package ax.xz.fuzz.blocks;
 
-import ax.xz.fuzz.instruction.Opcode;
-import ax.xz.fuzz.instruction.ResourcePartition;
-import ax.xz.fuzz.mutate.DeferredMutation;
-import ax.xz.fuzz.runtime.TestCase;
-import com.github.icedland.iced.x86.Instruction;
+import ax.xz.fuzz.runtime.ExecutableSequence;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 
 import java.util.*;
@@ -63,6 +59,10 @@ public class InterleavedBlock implements Block {
 
 	public Block rhs() {
 		return rhs;
+	}
+
+	public BitSet picks() {
+		return picks;
 	}
 
 	private class ItemSequence implements SequencedCollection<BlockEntry> {
@@ -205,7 +205,7 @@ public class InterleavedBlock implements Block {
 	public String toString() {
 		var sb = new StringBuilder();
 		for (var item : items()) {
-			var bytes = TestCase.encode(new CodeAssembler(64), item.instruction());
+			var bytes = ExecutableSequence.encode(new CodeAssembler(64), item.instruction());
 
 			for (var deferredMutation : item.mutations()) {
 				bytes = deferredMutation.perform(bytes);
@@ -250,5 +250,23 @@ public class InterleavedBlock implements Block {
 		var newRhs = rhs.without(rhsSkip.stream().mapToInt(i -> i).toArray());
 
 		return new InterleavedBlock(newLhs, newRhs, newPicks);
+	}
+
+	@Override
+	public final boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof InterleavedBlock that)) return false;
+
+		return lhs.equals(that.lhs) && rhs.equals(that.rhs) && Arrays.equals(lhsIndices, that.lhsIndices) && Arrays.equals(rhsIndices, that.rhsIndices) && Arrays.equals(indices, that.indices);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = lhs.hashCode();
+		result = 31 * result + rhs.hashCode();
+		result = 31 * result + Arrays.hashCode(lhsIndices);
+		result = 31 * result + Arrays.hashCode(rhsIndices);
+		result = 31 * result + Arrays.hashCode(indices);
+		return result;
 	}
 }

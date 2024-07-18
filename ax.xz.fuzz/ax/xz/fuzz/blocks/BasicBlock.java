@@ -1,30 +1,9 @@
 package ax.xz.fuzz.blocks;
 
-import ax.xz.fuzz.instruction.Opcode;
-import ax.xz.fuzz.instruction.ResourcePartition;
-import ax.xz.fuzz.runtime.TestCase;
-import ax.xz.fuzz.mutate.DeferredMutation;
-import com.github.icedland.iced.x86.Instruction;
-
-import java.lang.reflect.Array;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.*;
-import java.util.random.RandomGenerator;
 
 
-public class BasicBlock implements Block {
-
-	private final List<BlockEntry> items;
-
-	public BasicBlock(List<BlockEntry> items) {
-		this.items = List.copyOf(items);
-	}
-
-	@Override
-	public SequencedCollection<BlockEntry> items() {
-		return items;
-	}
+public record BasicBlock(List<BlockEntry> items) implements Block {
 
 	@Override
 	public int size() {

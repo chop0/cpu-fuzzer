@@ -1,21 +1,23 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.blocks.Block;
-import ax.xz.fuzz.blocks.BlockGenerator;
-import ax.xz.fuzz.blocks.InterleavedBlock;
+import ax.xz.fuzz.blocks.*;
+import ax.xz.fuzz.blocks.randomisers.ProgramRandomiser;
+import ax.xz.fuzz.instruction.MemoryPartition;
 import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.instruction.StatusFlag;
 import ax.xz.fuzz.tester.execution_result;
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.util.Arrays;
-import java.util.Random;
+import java.util.ArrayList;
 import java.util.SplittableRandom;
+import java.util.function.BiFunction;
 import java.util.random.RandomGenerator;
 
+import static ax.xz.fuzz.runtime.ExecutionResult.interestingMismatch;
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
-import static ax.xz.fuzz.runtime.TestCase.randomBranch;
 import static ax.xz.fuzz.tester.slave_h.*;
 import static com.github.icedland.iced.x86.Register.*;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
@@ -25,15 +27,16 @@ public class Tester {
 		System.loadLibrary("slave");
 	}
 
-	private static final int NUM_BLOCKS = System.getenv("NUM_BLOCKS") == null ? 5 : Integer.parseInt(System.getenv("NUM_BLOCKS"));
-	private static final int NUM_TRIALS = 2;
 	private static final RegisterSet BANNED_REGISTERS = RegisterSet.of(R15L, R15W, R15D, R15);
 
 	public final Trampoline trampoline;
 
 	public final MemorySegment scratch1;
-	private final MemorySegment scratch2;
+	final MemorySegment scratch2;
 	private final MemorySegment code;
+
+	private final ProgramRandomiser randomiser = new ProgramRandomiser();
+	private final ResourcePartition masterPartition;
 
 	private final RandomGenerator rng = new SplittableRandom();
 
@@ -44,113 +47,246 @@ public class Tester {
 		this.code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
 
 		this.trampoline = Trampoline.create(arena);
+
+		this.masterPartition = new ResourcePartition(StatusFlag.all(), RegisterSet.ALL_EVEX.subtract(BANNED_REGISTERS), MemoryPartition.of(scratch1, scratch2));
 	}
 
 	private static final Object printLock = new Object();
 
-	public ExecutionResult[] runTest() throws BlockGenerator.NoPossibilitiesException {
-		var partitions = ResourcePartition.partitioned(true, rng, scratch1, scratch2);
-		var lhsGenerator = new BlockGenerator(partitions[0].withAllowedRegisters(partitions[0].allowedRegisters().subtract(BANNED_REGISTERS)));
-		var rhsGenerator = new BlockGenerator(partitions[1].withAllowedRegisters(partitions[1].allowedRegisters().subtract(BANNED_REGISTERS)));
-
-		lhsGenerator.setPartition(partitions[0].withAllowedRegisters(partitions[0].allowedRegisters().subtract(BANNED_REGISTERS)));
-		rhsGenerator.setPartition(partitions[1].withAllowedRegisters(partitions[1].allowedRegisters().subtract(BANNED_REGISTERS)));
-
-		var  lhs = new Block[NUM_BLOCKS];
-		var rhs = new Block[NUM_BLOCKS];
-		for (int i = 0; i < NUM_BLOCKS; i++) {
-			lhs[i] = lhsGenerator.createBasicBlock(rng);
-			rhs[i] = rhsGenerator.createBasicBlock(rng);
-		}
-
-		var branches = new TestCase.Branch[NUM_BLOCKS];
-		for (int i = 0; i < NUM_BLOCKS; i++) {
-			branches[i] = new TestCase.Branch(randomBranch(rng), rng.nextInt(0, lhs.length + 1), rng.nextInt(0, lhs.length + 1));
-		}
-
-		var intialState = CPUState.filledWith(scratch1.address());
-		var result = new ExecutionResult[NUM_TRIALS];
-		byte[] previousCode = null;
+	public ExecutionResult[] runTest() throws NoPossibilitiesException {
+		var tc = randomiser.selectTestCase(rng, masterPartition);
+		var results = new ExecutionResult[tc.sequences().length];
 
 		ExecutionResult previousResult = null;
-		TestCase previousBlock = null;
+		ExecutableSequence previousBlock = null;
+		byte[] previousCode = null;
 
-		for (int i = 0; i < NUM_TRIALS; i++) {
-			scratch1.fill((byte) 0);
-			scratch2.fill((byte) 0);
+		ExecutableSequence[] sequences = tc.sequences();
+		for (int i = 0; i < sequences.length; i++) {
+			var test = sequences[i];
+			SequenceResult output = runSequence(tc.initialState(), test);
 
-			var interleaved = shuffle(lhs, rhs);
-			var test = new TestCase(interleaved, branches);
-
-			int codeLength = test.encode(code.address(), trampoline, code, R15, 100);
-			code.asSlice(codeLength).fill((byte) 0);
-
-			var codeSlice = code.asSlice(0, codeLength);
-			result[i] = runBlock(intialState, codeSlice);
-
-			if (ExecutionResult.interestingMismatch(previousResult, result[i])) {
+			if (interestingMismatch(previousResult, output.result())) {
 				synchronized (printLock) {
 					System.err.println("Found inconsistent behaviour");
-					System.err.println("--- LHS ----");
-					System.out.println(partitions[0]);
-					System.err.println(Arrays.toString(lhs));
-					System.err.println("--- RHS ----");
-					System.out.println(partitions[1]);
-					System.err.println(Arrays.toString(rhs));
-					System.err.println("--- First interleaved test ----");
-					System.err.println(previousBlock);
-					System.err.println("--- Second interleaved test ----");
-					System.err.println(test);
+					System.err.println(tc);
 					System.err.println("--- First result ----");
 					System.err.println(previousResult);
 					System.err.println("--- Second result ----");
-					System.err.println(result[i]);
+					System.err.println(output.result());
 
 					for (var b : previousCode) {
 						System.out.printf("%02x ", b & 0xff);
 					}
 					System.out.println();
 
-					for (var b : codeSlice.toArray(JAVA_BYTE)) {
+					for (var b : output.codeSlice().toArray(JAVA_BYTE)) {
 						System.out.printf("%02x ", b & 0xff);
 					}
 
 					System.out.println();
 
+					var minimised = minimise(tc);
+					System.err.println("Minimised:");
+					System.err.println(minimised);
 
-					System.out.println(Arrays.toString(branches));
-
-					Minimiser.minimise(() -> {
-						scratch1.fill((byte) 0);
-						scratch2.fill((byte) 0);
-						}, previousBlock.blocks(), test.blocks(), branches);
+					var mapper = OpcodeCache.getMapper();
+					String value = null;
+					try {
+						value = mapper.writeValueAsString(tc.initialState());
+					} catch (JsonProcessingException e) {
+						throw new RuntimeException(e);
 					}
+					System.err.println(value);
+				}
 			}
 
-			previousResult = result[i];
+			results[i] = previousResult = output.result();
 			previousBlock = test;
-			previousCode = codeSlice.toArray(JAVA_BYTE);
-
+			previousCode = output.codeSlice().toArray(JAVA_BYTE);
 		}
 
-		return result;
+		return results;
 	}
 
-	private InterleavedBlock[] shuffle(Block[] lhs, Block[] rhs) {
-		if (lhs.length != rhs.length) {
-			throw new IllegalArgumentException("lhs and rhs must have the same length");
+	private SequenceResult runSequence(CPUState initialState, ExecutableSequence test) {
+		scratch1.fill((byte) 0);
+		scratch2.fill((byte) 0);
+
+		int codeLength = test.encode(code.address(), trampoline, code, R15, 100);
+		code.asSlice(codeLength).fill((byte) 0);
+
+		var codeSlice = code.asSlice(0, codeLength);
+		var result = runBlock(initialState, codeSlice);
+		SequenceResult output = new SequenceResult(codeSlice, result);
+		return output;
+	}
+
+	private record SequenceResult(MemorySegment codeSlice, ExecutionResult result) {
+	}
+
+	private InvarianceTestCase minimise(InvarianceTestCase tc) {
+		if (tc.sequences().length != 2)
+			throw new IllegalArgumentException("Can only minimise two-sequence test cases");
+
+		var test1 = tc.sequences()[0].blocks();
+		var test2 = tc.sequences()[1].blocks();
+		var branches = tc.branches();
+		var startState = tc.initialState();
+
+		for (;;) {
+			boolean changed = false;
+
+			var simplifiedState = simplifyInitialState(startState, new ExecutableSequence(test1, branches), new ExecutableSequence(test2, branches));
+			if (!simplifiedState.equals(startState)) {
+				startState = simplifiedState;
+				System.err.println("Simplified initial state");
+				continue;
+			}
+
+			for (int block = 0; block < test1.length; block++) {
+				if (!(test1[block] instanceof InterleavedBlock a && test2[block] instanceof InterleavedBlock b)) {
+					System.out.println("Skipping non-interleaved block");
+					continue;
+				}
+				
+				var redundantLeft = findRedundantInstructions(a.lhs().size(), startState, test1, test2, branches, block, InterleavedBlock::leftInterleavedIndex);
+
+				if (!redundantLeft.isEmpty()) {
+					test1[block] = a.without(redundantLeft.stream().mapToInt(a::leftInterleavedIndex).toArray());
+					test2[block] = b.without(redundantLeft.stream().mapToInt(b::leftInterleavedIndex).toArray());
+
+					changed = true;
+					System.err.printf("Removed %d redundant instructions from block %d%n", redundantLeft.size(), block);
+					break;
+				}
+
+				var redundantRight = findRedundantInstructions(a.rhs().size(), startState, test1, test2, branches, block, InterleavedBlock::rightInterleavedIndex);
+
+				if (!redundantRight.isEmpty()) {
+					test1[block] = a.without(redundantRight.stream().mapToInt(a::rightInterleavedIndex).toArray());
+					test2[block] = b.without(redundantRight.stream().mapToInt(b::rightInterleavedIndex).toArray());
+
+					changed = true;
+					System.err.printf("Removed %d redundant instructions from block %d%n", redundantRight.size(), block);
+					break;
+				}
+			}
+
+			if (!changed)
+				break;
 		}
 
-		var result = new InterleavedBlock[lhs.length];
-		for (int i = 0; i < lhs.length; i++) {
-			result[i] = Block.randomlyInterleaved(rng, lhs[i], rhs[i]);
+		var sequences = new ExecutableSequence[] { new ExecutableSequence(test1, branches), new ExecutableSequence(test2, branches) };
+		return new InvarianceTestCase(tc.pairs(), tc.branches(), sequences, startState);
+	}
+
+	private ArrayList<Integer> findRedundantInstructions(int victimBlockSize, CPUState startState, Block[] test1, Block[] test2, Branch[] branches, int blockToReduce, BiFunction<InterleavedBlock, Integer, Integer> getVictimIndex) {
+		var a = (InterleavedBlock) test1[blockToReduce];
+		var b = (InterleavedBlock) test2[blockToReduce];
+
+		assert a.size() == b.size();
+
+		var redundantIndices = new ArrayList<Integer>();
+		for (int i = 0; i < victimBlockSize; i++) {
+			int test1Index = getVictimIndex.apply(a, i);
+			int test2Index = getVictimIndex.apply(b, i);
+
+			var aWithout = a.without(test1Index);
+			var bWithout = b.without(test2Index);
+
+			var test1Changed = new Block[test1.length];
+			var test2Changed = new Block[test2.length];
+
+			System.arraycopy(test1, 0, test1Changed, 0, test1.length);
+			System.arraycopy(test2, 0, test2Changed, 0, test2.length);
+
+			test1Changed[blockToReduce] = aWithout;
+			test2Changed[blockToReduce] = bWithout;
+
+			var test1Result = runSequence(startState, new ExecutableSequence(test1Changed, branches));
+			var test2Result = runSequence(startState, new ExecutableSequence(test2Changed, branches));
+
+			if (interestingMismatch(test1Result.result, test2Result.result)) {
+				redundantIndices.add(i);
+			}
 		}
 
-		return result;
+		return redundantIndices;
+	}
+
+	private CPUState simplifyInitialState(CPUState state, ExecutableSequence... sequences) {
+		for (int i = 0; i < 32; i++) {
+			var zmm = state.zmm().withZeroed(i);
+			var newState = new CPUState(state.gprs(), zmm, state.mmx(), state.rflags());
+
+			boolean consistent = true;
+			ExecutionResult previous = null;
+			for (var sequence : sequences) {
+				var result = runSequence(newState, sequence).result;
+				if (interestingMismatch(previous, result)) {
+					consistent = false;
+					break;
+				}
+				previous = result;
+			}
+
+			if (!consistent) {
+				return newState;
+			} else {
+				state = newState;
+			}
+		}
+
+		for (int i = 0; i < 8; i++) {
+			var mmx = state.mmx().withZeroed(i);
+			var newState = new CPUState(state.gprs(), state.zmm(), mmx, state.rflags());
+
+			boolean consistent = true;
+			ExecutionResult previous = null;
+			for (var sequence : sequences) {
+				var result = runSequence(newState, sequence).result;
+				if (interestingMismatch(previous, result)) {
+					consistent = false;
+					break;
+				}
+				previous = result;
+			}
+
+			if (!consistent) {
+				return newState;
+			} else {
+				state = newState;
+			}
+		}
+
+		for (int i = 0; i < 16; i++) {
+			var gprs = state.gprs().withZeroed(i);
+			var newState = new CPUState(gprs, state.zmm(), state.mmx(), state.rflags());
+
+			boolean consistent = true;
+			ExecutionResult previous = null;
+			for (var sequence : sequences) {
+				var result = runSequence(newState, sequence).result;
+				if (interestingMismatch(previous, result)) {
+					consistent = false;
+					break;
+				}
+				previous = result;
+			}
+
+			if (!consistent) {
+				return newState;
+			} else {
+				state = newState;
+			}
+		}
+
+		return state;
 	}
 
 	public static ExecutionResult runBlock(CPUState startState, Block block) throws Block.UnencodeableException {
-		try (var arena = Arena.ofConfined()) {
+		try (var arena = Arena.ofShared()) {
 			var code = MemoryUtils.mmap(arena, MemorySegment.NULL, (block.size() + 1) * 15L, READ, WRITE, EXECUTE);
 
 			var trampoline = Trampoline.create(arena);

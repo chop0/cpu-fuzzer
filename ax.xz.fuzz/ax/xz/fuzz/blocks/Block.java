@@ -14,7 +14,7 @@ import java.nio.ByteOrder;
 import java.util.*;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.runtime.TestCase.TEST_CASE_FINISH;
+import static ax.xz.fuzz.runtime.ExecutableSequence.TEST_CASE_FINISH;
 
 public interface Block {
 	default int[] encode(Trampoline trampoline, MemorySegment code) throws UnencodeableException {
@@ -53,25 +53,6 @@ public interface Block {
 	SequencedCollection<BlockEntry> items();
 	default Block without(int... instructionIndex) {
 		return new SkipBlock(this, Arrays.stream(instructionIndex).boxed().toList());
-	}
-
-	public static InterleavedBlock randomlyInterleaved(RandomGenerator rng, Block lhs, Block rhs) {
-		var picks = new BitSet(lhs.size() + rhs.size());
-
-		{
-			int lhsIndex = 0, rhsIndex = 0;
-			for (int i = 0; i < (lhs.size() + rhs.size()); i++) {
-				if ((rng.nextBoolean() && lhsIndex < lhs.size()) || rhsIndex >= rhs.size()) {
-					picks.set(i, true);
-					lhsIndex++;
-				} else {
-					rhsIndex++;
-					picks.set(i, false);
-				}
-			}
-		}
-
-		return new InterleavedBlock(lhs, rhs, picks);
 	}
 
 

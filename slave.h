@@ -30,10 +30,10 @@ typedef struct {
 
 struct saved_state {
     uint64_t fs_base, gs_base, rax, rbx, rcx, rdx, rsi, rdi, rbp, r8, r9, r10, r11, r12, r13, r14, r15, rsp;
-    uint8_t zmm[64][32];
+    uint8_t zmm [32][64];
     uint64_t mm[8];
     uint64_t rflags;
-};
+} ;
 
 struct fault_details {
     void *fault_address;

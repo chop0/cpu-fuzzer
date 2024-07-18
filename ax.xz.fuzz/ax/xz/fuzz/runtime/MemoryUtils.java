@@ -28,9 +28,26 @@ public class MemoryUtils {
 		return (value + alignment - 1) & ~(alignment - 1);
 	}
 
-	public static long aligndown(long value, long align) {
-		long mask = align - 1;
-		return value & ~mask;
+	public static MemorySegment alignUp(MemorySegment ms, long alignment) {
+		long address = ms.address();
+		long aligned = alignUp(address, alignment);
+		long diff = aligned - address;
+		return ms.asSlice(diff, ms.byteSize() - diff);
+	}
+
+	public static long alignDown(long value, long align) {
+		return value & ~(align - 1);
+	}
+
+	public static MemorySegment alignDown(MemorySegment ms, long alignment) {
+		long address = ms.address();
+		long aligned = alignDown(address, alignment);
+		long diff = address - aligned;
+		return ms.asSlice(0, ms.byteSize() - diff);
+	}
+
+	public static long unsignedMin(long a, long b) {
+		return Long.compareUnsigned(a, b) < 0 ? a : b;
 	}
 
 	public enum Protection {

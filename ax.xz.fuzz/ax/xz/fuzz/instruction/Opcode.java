@@ -1,8 +1,19 @@
 package ax.xz.fuzz.instruction;
 
-import ax.xz.fuzz.blocks.BlockGenerator;
+import ax.xz.fuzz.blocks.NoPossibilitiesException;
+import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.parse.OperandLexer;
 import ax.xz.fuzz.parse.OperandParser;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.deser.std.EnumSetDeserializer;
+import com.fasterxml.jackson.databind.jsontype.TypeDeserializer;
+import com.fasterxml.jackson.databind.ser.std.EnumSetSerializer;
+import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 import com.github.icedland.iced.x86.enc.Encoder;
@@ -15,9 +26,13 @@ import java.util.random.RandomGenerator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL;
+import static java.util.Objects.requireNonNull;
 import static java.util.stream.Stream.concat;
 
+@JsonInclude(NON_NULL)
 public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnemonic, int icedVariant, Operand[] operands) {
+	@JsonCreator
 	public Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnemonic, int icedVariant, Operand[] operands) {
 		this.prefixes = prefixes;
 		this.icedFieldName = icedFieldName;
@@ -56,7 +71,6 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 		var prefixes = Arrays.stream(parts).takeWhile(prefixNames::contains).toList();
 		var mnemonic = Arrays.stream(parts).dropWhile(prefixes::contains).findFirst().orElseThrow();
 
-
 		var sops = InstructionReference.suppressedOperands(Instruction.create(icedVariant), mnemonic);
 		if (sops == null)
 			return null;
@@ -77,7 +91,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 				icedFieldName,
 				mnemonic,
 				icedVariant,
-				operands
+				requireNonNull(operands)
 		);
 	}
 
@@ -98,37 +112,37 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 		return listener.getOperand();
 	}
 
-	public Instruction ofRandom(ResourcePartition resourcePartition, RandomGenerator randomGenerator) throws BlockGenerator.NoPossibilitiesException {
+	public Instruction select(RandomGenerator rng, ResourcePartition resourcePartition) throws NoPossibilitiesException {
 		var insn = Instruction.create(icedVariant);
 
 		int explicitOpIdx = 0;
 		for (var operand : operands) {
 			switch (operand) {
 				case Operand.Counted counted -> {
-					counted.setRandom(randomGenerator, insn, explicitOpIdx++, resourcePartition);
+					counted.select(rng, insn, explicitOpIdx++, resourcePartition);
 					if (insn.getOpKind(explicitOpIdx - 1) == OpKind.REGISTER)
 						if (RegisterSet.EXTENDED_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
 							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.LEGACY_HIGH_GP));
 						else if (RegisterSet.LEGACY_HIGH_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
 							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.EXTENDED_GP));
 				}
-				case Operand.Uncounted uncounted -> uncounted.setRandom(randomGenerator, insn, resourcePartition);
+				case Operand.Uncounted uncounted -> uncounted.select(rng, insn, resourcePartition);
 				case Operand.SuppressedOperand _ -> {
 				}
 			}
 		}
 
-//		insn.setRepePrefix(randomGenerator.nextInt(30) == 0);
-//		insn.setRepnePrefix(randomGenerator.nextInt(30) == 0);
-//		insn.setRepPrefix(randomGenerator.nextInt(30) == 0);
-//		insn.setLockPrefix(randomGenerator.nextInt(30) == 0);
+//		insn.setRepePrefix(rng.nextInt(30) == 0);
+//		insn.setRepnePrefix(rng.nextInt(30) == 0);
+//		insn.setRepPrefix(rng.nextInt(30) == 0);
+//		insn.setLockPrefix(rng.nextInt(30) == 0);
 
-		if (randomGenerator.nextInt(3) == 0) {
-			insn.setSegmentPrefix(RegisterSet.SEGMENT.choose(randomGenerator));
+		if (rng.nextInt(3) == 0) {
+			insn.setSegmentPrefix(RegisterSet.SEGMENT.select(rng));
 		}
 
-//		if ( randomGenerator.nextBoolean()) {
-//			switch (randomGenerator.nextInt(3)) {
+//		if ( rng.nextBoolean()) {
+//			switch (rng.nextInt(3)) {
 //				case 0 -> insn.setRepnePrefix(true);
 //				case 1 -> insn.setRepePrefix(true);
 //				case 2 -> insn.setRepPrefix(true);
@@ -136,6 +150,45 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 //		}
 
 		return insn;
+	}
+
+	public void reverse(ReverseRandomGenerator rng, ResourcePartition resourcePartition, Instruction insn) throws NoPossibilitiesException {
+		int explicitOpIdx = 0;
+		for (var operand : operands) {
+			switch (operand) {
+				case Operand.Counted counted -> {
+					counted.reverse(rng, insn, explicitOpIdx++, resourcePartition);
+					if (insn.getOpKind(explicitOpIdx - 1) == OpKind.REGISTER)
+						if (RegisterSet.EXTENDED_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
+							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.LEGACY_HIGH_GP));
+						else if (RegisterSet.LEGACY_HIGH_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
+							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.EXTENDED_GP));
+				}
+				case Operand.Uncounted uncounted -> uncounted.reverse(rng, insn, resourcePartition);
+				case Operand.SuppressedOperand _ -> {
+				}
+			}
+		}
+
+//		insn.setRepePrefix(rng.nextInt(30) == 0);
+//		insn.setRepnePrefix(rng.nextInt(30) == 0);
+//		insn.setRepPrefix(rng.nextInt(30) == 0);
+//		insn.setLockPrefix(rng.nextInt(30) == 0);
+
+		if (insn.hasSegmentPrefix()) {
+			rng.pushInt(0);
+			RegisterSet.SEGMENT.reverse(rng, insn.getSegmentPrefix());
+		} else {
+			rng.pushInt(1);
+		}
+
+//		if ( rng.nextBoolean()) {
+//			switch (rng.nextInt(3)) {
+//				case 0 -> insn.setRepnePrefix(true);
+//				case 1 -> insn.setRepePrefix(true);
+//				case 2 -> insn.setRepPrefix(true);
+//			}
+//		}
 	}
 
 	public boolean fulfilledBy(boolean evex, ResourcePartition rp) {
@@ -156,13 +209,13 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 			for (var operand : operands) {
 				switch (operand) {
 					case Operand.Counted counted ->
-							counted.setRandom(random, insn, explicitOpIdx++, rp);
-					case Operand.Uncounted uncounted -> uncounted.setRandom(random, insn, rp);
+							counted.select(random, insn, explicitOpIdx++, rp);
+					case Operand.Uncounted uncounted -> uncounted.select(random, insn, rp);
 					case Operand.SuppressedOperand _ -> {
 					}
 				}
 			}
-		} catch (BlockGenerator.NoPossibilitiesException e) {
+		} catch (NoPossibilitiesException e) {
 			throw new RuntimeException(e);
 		}
 
@@ -185,7 +238,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 		return sb.toString();
 	}
 
-	enum Prefix {
+	public enum Prefix {
 		D3NOW,
 		EVEX,
 		VEX,

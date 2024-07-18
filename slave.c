@@ -1,5 +1,4 @@
 #include "slave.h"
-#include "memory_mappings.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +14,7 @@
 #include <fenv.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <setjmp.h>
 
 
 #include <pthread.h>
@@ -115,8 +115,6 @@ static void maybe_cpu_fuzzer_setup(void) {
     initialised = true;
 
     signal_stack_region = mmap(NULL, 2 * SIGSTKSZ * MAX_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    memory_mappings_t mappings;
-    load_process_mappings(&mappings);
 
     for (int i = 0; i < MAX_THREADS; i++) {
         active_thread_info[i].sigstk_address = signal_stack_region + 2 * i * SIGSTKSZ + SIGSTKSZ - 16;
@@ -180,7 +178,11 @@ void do_test( void (*trampoline)(void), uint8_t *code, size_t code_length, struc
     void (*trampoline_func)(void *, struct saved_state *) = (void *)trampoline + TRAMPOLINE_START_OFFSET;
 
     active_thread_info[my_thread_idx].faulted = false;
-   trampoline_func(code, &output->state);
+    sigjmp_buf sigbuf;
+   if (sigsetjmp(&sigbuf, 1) == 0) {
+   	trampoline_func(code, &output->state);
+   	siglongjmp(&sigbuf, 1);
+    }
     output->faulted = active_thread_info[my_thread_idx].faulted;
     if (output->faulted) {
         memcpy(&output->fault, &active_thread_info[my_thread_idx].fault_details, sizeof(output->fault));

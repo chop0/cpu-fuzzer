@@ -90,17 +90,17 @@
 
 .altmacro
 
-.macro write_vector_regs_ bank, start, end, offset=0
+.macro write_vector_regs_ bank, start, end, size, offset=0
     vmovups %\bank\start, offset (%r15)
     .if \end-\start
-        write_vector_regs_ bank, %(start+1), \end, (\offset+64)
+        write_vector_regs_ bank, %(start+1), \end, \size, (\offset+\size)
     .endif
 .endm
 
-.macro read_vector_regs_ bank, start, end, offset=0
+.macro read_vector_regs_ bank, start, end, size, offset=0
     vmovups offset (%r15), %\bank\start
     .if \end-\start
-        read_vector_regs_ bank, %(\start+1), \end, %(\offset+64)
+        read_vector_regs_ bank, %(\start+1), \end, \size, %(\offset+\size)
     .endif
 .endm
 
@@ -128,15 +128,15 @@
     jmp done
 
 avx512:
-    func zmm, 0, 31, offset
+    func zmm, 0, 31, 64, offset
     jmp done
 
 avx:
-    func ymm, 0, 15, offset
+    func ymm, 0, 15, 64, offset
     jmp done
 
 sse:
-    func xmm, 0, 7, offset
+    func xmm, 0, 7, 64, offset
     jmp done
 
 done:

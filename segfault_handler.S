@@ -86,16 +86,16 @@ check_active:
     mov test_case_exit@GOTPCREL(%rip), %r9
     sub routine_begin@GOTPCREL(%rip), %r9
     add TRAMPOLINE_ADDRESS_OFFSET(%r10), %r9
-    mov $1, FAULT_OFFSET(%r10)
+    movb $1, FAULT_OFFSET(%r10)
 
-    mov 0(%rsi), %r8d
-    mov %r8d, FAULT_REASON_OFFSET(%r10)
+    movl 0(%rsi), %r8d
+    movl %r8d, FAULT_REASON_OFFSET(%r10)
 
-    mov 8(%rsi), %r8d
-    mov %r8d, FAULT_CODE_OFFSET(%r10)
+    movl 8(%rsi), %r8d
+    movl %r8d, FAULT_CODE_OFFSET(%r10)
 
-    mov 16(%rsi), %r8
-    mov %r8, FAULT_ADDRESS_OFFSET(%r10)
+    movq 16(%rsi), %r8
+    movq %r8, FAULT_ADDRESS_OFFSET(%r10)
 
     jmp *%r9
 

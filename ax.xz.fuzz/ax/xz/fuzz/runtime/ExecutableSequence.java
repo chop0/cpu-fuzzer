@@ -7,7 +7,6 @@ import com.github.icedland.iced.x86.asm.AsmRegister64;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeAssemblerResult;
 import com.github.icedland.iced.x86.asm.CodeLabel;
-import com.github.icedland.iced.x86.fmt.gas.GasFormatter;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SymbolLookup;
@@ -19,12 +18,12 @@ import java.util.random.RandomGenerator;
 
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
-public final class TestCase {
+public final class ExecutableSequence {
 	static {
 		System.loadLibrary("slave");
 	}
 
-	public static final MemorySegment TEST_CASE_FINISH = SymbolLookup.loaderLookup().find("test_case_exit").orElse(null);
+	public static final MemorySegment TEST_CASE_FINISH = SymbolLookup.loaderLookup().find("test_case_exit").orElseThrow();
 	private final Block[] blocks;
 	private final Branch[] branches;
 
@@ -33,7 +32,7 @@ public final class TestCase {
 
 	private MemorySegment lastCode;
 
-	public TestCase(Block[] blocks, Branch[] branches) {
+	public ExecutableSequence(Block[] blocks, Branch[] branches) {
 		if (blocks.length == 0)
 			throw new IllegalArgumentException("blocks must not be empty");
 		this.blocks = new Block[blocks.length];
@@ -96,8 +95,8 @@ public final class TestCase {
 				blockAssembler.db(encoded);
 			}
 
-			branches[i].type.perform.accept(blockAssembler, blockHeaders[branches[i].takenIndex]);
-			blockAssembler.jmp(blockHeaders[branches[i].notTakenIndex]);
+			branches[i].type().perform.accept(blockAssembler, blockHeaders[branches[i].takenIndex()]);
+			blockAssembler.jmp(blockHeaders[branches[i].notTakenIndex()]);
 		}
 
 		blockAssembler.label(exit);
@@ -108,19 +107,6 @@ public final class TestCase {
 		var result = (CodeAssemblerResult) blockAssembler.assemble(bb::put, rip);
 		lastCode = code.asSlice(initialPosition, bb.position());
 		return bb.position() - initialPosition;
-	}
-
-	record Branch(BranchType type, int takenIndex, int notTakenIndex) {
-		@Override
-		public String toString() {
-			return """
-				%s %d
-				jmp %d""".formatted(type.name().toLowerCase(), takenIndex, notTakenIndex);
-		}
-	}
-
-	static BranchType randomBranch(RandomGenerator rng) {
-		return BranchType.values()[rng.nextInt(BranchType.values().length)];
 	}
 
 	public enum BranchType {
@@ -181,7 +167,7 @@ public final class TestCase {
 	public boolean equals(Object obj) {
 		if (obj == this) return true;
 		if (obj == null || obj.getClass() != this.getClass()) return false;
-		var that = (TestCase) obj;
+		var that = (ExecutableSequence) obj;
 		return Arrays.equals(this.blocks, that.blocks) &&
 		       Arrays.equals(this.branches, that.branches);
 	}

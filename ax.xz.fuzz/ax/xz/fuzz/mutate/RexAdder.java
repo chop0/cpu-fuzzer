@@ -1,18 +1,18 @@
 package ax.xz.fuzz.mutate;
 
+import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.Operand;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
 
-import java.util.Arrays;
 import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.mutate.Prefixes.isPrefix;
 
 public class RexAdder implements Mutator {
 	@Override
-	public boolean appliesTo(Opcode code, Instruction instruction, ResourcePartition rp) {
+	public boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction) {
 		for (Operand op : code.operands()) {
 			if (op instanceof Operand.Counted) {
 				return false;
@@ -22,17 +22,22 @@ public class RexAdder implements Mutator {
 	}
 
 	@Override
-	public DeferredMutation createMutation(Instruction instruction, RandomGenerator rng, ResourcePartition rp) {
+	public boolean comesFrom(ResourcePartition rp, Opcode code, Instruction instruction, DeferredMutation outcome) {
+		return outcome instanceof RexMutation;
+	}
+
+	@Override
+	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction) {
 		return new RexMutation((byte) ((0x40 | (byte) rng.nextInt(0x10)) & ~(1)));
 	}
 
-	private class RexMutation implements DeferredMutation {
-		private final byte rex;
+	@Override
+	public void reverse(ReverseRandomGenerator rng, ResourcePartition rp, Instruction instruction, DeferredMutation outcome) {
+		var mutation = (RexMutation) outcome;
+		rng.pushInt(mutation.rex & 0b1111);
+	}
 
-		public RexMutation(byte rex) {
-			this.rex = rex;
-		}
-
+	private record RexMutation(byte rex) implements DeferredMutation {
 		@Override
 		public byte[] perform(byte[] insnEncoded) {
 			// find end of prefixes

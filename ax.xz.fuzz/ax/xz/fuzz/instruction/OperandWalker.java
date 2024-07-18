@@ -50,7 +50,7 @@ public class OperandWalker extends OperandBaseListener {
 
 	@Override
 	public void enterMem(OperandParser.MemContext ctx) {
-		operand = (new Mem(ctx.MEMORY_SIZE() != null ? Integer.parseInt(ctx.MEMORY_SIZE().getText().substring(1)) : 0));
+		operand = (new Mem(ctx.MEMORY_SIZE() != null ? Integer.parseInt(ctx.MEMORY_SIZE().getText().substring(1)) : 64*8));
 	}
 
 	@Override

@@ -13,4 +13,6 @@ module ax.xz.fuzz {
 	opens ax.xz.fuzz.encoding to com.fasterxml.jackson.databind;
 	opens ax.xz.fuzz.blocks to com.fasterxml.jackson.databind;
 	opens ax.xz.fuzz.instruction to com.fasterxml.jackson.databind;
+	opens ax.xz.fuzz.blocks.randomisers to com.fasterxml.jackson.databind;
+	opens ax.xz.fuzz.runtime to com.fasterxml.jackson.databind;
 }

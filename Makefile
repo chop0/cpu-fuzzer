@@ -1,5 +1,5 @@
 ANTLR_JAR = antlr-4.13.1-complete.jar
-MODULE_PATH = $(ANTLR_JAR):iced-x86-1.20.0.jar:jackson-annotations-2.16.0-rc1.jar:jackson-core-2.16.0-rc1.jar:jackson-databind-2.16.0-rc1.jar
+MODULE_PATH = $(ANTLR_JAR):iced-x86-1.20.0.jar:jackson-annotations-2.17.2.jar:jackson-core-2.17.2.jar:jackson-databind-2.17.2.jar
 
 run: ax.xz.fuzz libslave.so
 	java --enable-native-access=ax.xz.fuzz --enable-preview -Djava.library.path=. -p $(MODULE_PATH):out -m ax.xz.fuzz/ax.xz.fuzz.runtime.Master
@@ -10,7 +10,7 @@ profile: ax.xz.fuzz libslave.so
 
 all: libslave.so ax.xz.fuzz
 
-libslave.so: test_entry_routine.S slave.c segfault_handler.S memory_mappings.c
+libslave.so: test_entry_routine.S slave.c segfault_handler.S
 	gcc -g  -Wl,-z,relro,-z,now,-fPIC -fPIC -fno-stack-protector -z noexecstack -shared -O0 -o $@ $^
 
 cpu-fuzzer.tar.gz: ax.xz.fuzz libslave.so

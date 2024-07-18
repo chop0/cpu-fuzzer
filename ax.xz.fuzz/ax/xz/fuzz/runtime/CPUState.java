@@ -4,20 +4,23 @@ import ax.xz.fuzz.tester.saved_state;
 
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.RecordComponent;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
 import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
+import static java.lang.foreign.ValueLayout.*;
 
 // TODO: include segment registers
 public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXRegisters mmx, long rflags) {
 	private static final MemoryLayout ZMM = MemoryLayout.sequenceLayout(64, JAVA_BYTE);
-
 
 	public static CPUState ofSavedState(MemorySegment savedState) {
 		return new CPUState(
@@ -54,8 +57,55 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 	}
 
 
-	record GeneralPurposeRegisters(long rax, long rbx, long rcx, long rdx, long rsi, long rdi, long rbp, long r8,
+	public record GeneralPurposeRegisters(long rax, long rbx, long rcx, long rdx, long rsi, long rdi, long rbp, long r8,
 								   long r9, long r10, long r11, long r12, long r13, long r14, long r15, long rsp) {
+		private static final RecordComponent[] components = GeneralPurposeRegisters.class.getRecordComponents();
+		private static final Constructor<GeneralPurposeRegisters> constructor = (Constructor)GeneralPurposeRegisters.class.getConstructors()[0];
+
+		public GeneralPurposeRegisters withZeroed(int idx) {
+			var parameters = new Long[components.length];
+			for (int i = 0; i < components.length; i++) {
+				if (i == idx) {
+					parameters[i] = 0L;
+				} else {
+					try {
+						parameters[i] = (long)components[i].getAccessor().invoke(this);
+					} catch (IllegalAccessException | InvocationTargetException e) {
+						throw new RuntimeException(e);
+					}
+				}
+			}
+
+			try {
+				return constructor.newInstance((Object[]) parameters);
+			} catch (InstantiationException | InvocationTargetException | IllegalAccessException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (!(o instanceof GeneralPurposeRegisters that)) return false;
+
+			return r8 == that.r8
+			       && r9 == that.r9
+			       && rax == that.rax
+			       && rbx == that.rbx
+			       && rcx == that.rcx
+			       && rdx == that.rdx
+			       && rsi == that.rsi
+			       && rdi == that.rdi
+			       && rbp == that.rbp
+			       && r10 == that.r10
+			       && r11 == that.r11
+			       && r12 == that.r12
+			       && r13 == that.r13
+			       && r14 == that.r14
+			       && r15 == that.r15
+			       && rsp == that.rsp;
+		}
+
 		static GeneralPurposeRegisters filledWith(long thing) {
 			return new GeneralPurposeRegisters(thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing, thing);
 		}
@@ -97,7 +147,7 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 			saved_state.rdx(savedState, rdx);
 			saved_state.rsi(savedState, rsi);
 			saved_state.rdi(savedState, rdi);
-			saved_state.rbp(savedState, rsp);
+			saved_state.rbp(savedState, rbp);
 			saved_state.r8(savedState, r8);
 			saved_state.r9(savedState, r9);
 			saved_state.r10(savedState, r10);
@@ -110,7 +160,21 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 		}
 	}
 
-	record VectorRegisters(byte[][] zmm) {
+	public record VectorRegisters(byte[][] zmm) {
+		public VectorRegisters withZeroed(int index) {
+			var newZmm = Arrays.copyOf(zmm, zmm.length);
+			newZmm[index] = new byte[64];
+			return new VectorRegisters(newZmm);
+		}
+
+		public VectorRegisters withZeroed(int start, int end) {
+			var newZmm = Arrays.copyOf(zmm, zmm.length);
+			for (int i = start; i < end; i++) {
+				newZmm[i] = new byte[64];
+			}
+			return new VectorRegisters(newZmm);
+		}
+
 		static VectorRegisters filledWith(long thing) {
 			var zmm = new byte[32][64];
 			for (byte[] bytes : zmm) {
@@ -140,7 +204,7 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 
 		void toArray(MemorySegment savedState) {
 			for (int i = 0; i < zmm.length; i++) {
-				savedState.asSlice(i, ZMM).copyFrom(MemorySegment.ofArray(zmm[i]));
+				savedState.asSlice(i * ZMM.byteSize(), ZMM).copyFrom(MemorySegment.ofArray(zmm[i]));
 			}
 		}
 
@@ -148,10 +212,23 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 			return new BigInteger(zmm[index]);
 		}
 
+		String getAsString(int index) {
+			var builder = new StringBuilder();
+			boolean hasNonZero = false;
+			for (int i = 0; i < 64; i++) {
+				builder.append(String.format("%02x", zmm[index][i]));
+				hasNonZero |= zmm[index][i] != 0;
+			}
+			if (!hasNonZero) {
+				return "0";
+			}
+			return builder.toString();
+		}
+
 		@Override
 		public String toString() {
 			return IntStream.range(0, zmm.length)
-					.mapToObj(i -> "zmm" + i + "=" + get(i).toString(16))
+					.mapToObj(i -> "zmm" + i + "=" + getAsString(i))
 					.reduce((a, b) -> a + ", " + b)
 					.orElse("");
 		}
@@ -171,7 +248,19 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 		}
 	}
 
-	record MMXRegisters(long[] mm) {
+	public record MMXRegisters(long[] mm) {
+		public MMXRegisters {
+			if (mm.length != 8) {
+				throw new IllegalArgumentException("MMX registers must have 8 elements");
+			}
+		}
+
+		MMXRegisters withZeroed(int index) {
+			var newMm = Arrays.copyOf(mm, mm.length);
+			newMm[index] = 0;
+			return new MMXRegisters(newMm);
+		}
+
 		static MMXRegisters filledWith(long thing) {
 			var mm = new long[8];
 			Arrays.fill(mm, thing);
@@ -188,8 +277,8 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 
 		static MMXRegisters ofArray(MemorySegment array) {
 			return new MMXRegisters(
-					StreamSupport.stream(array.spliterator(MemoryLayout.sequenceLayout(8, JAVA_LONG)), false)
-							.mapToLong(ms -> ms.get(JAVA_LONG, 0))
+					StreamSupport.stream(array.spliterator(JAVA_LONG_UNALIGNED), false)
+							.mapToLong(ms -> ms.get(JAVA_LONG_UNALIGNED, 0))
 							.toArray()
 			);
 		}

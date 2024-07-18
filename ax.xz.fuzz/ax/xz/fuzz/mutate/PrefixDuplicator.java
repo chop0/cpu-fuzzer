@@ -1,24 +1,28 @@
 package ax.xz.fuzz.mutate;
 
+import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 import com.github.icedland.iced.x86.Register;
 
-import java.util.Map;
 import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.mutate.Prefixes.isPrefix;
 import static com.github.icedland.iced.x86.Register.*;
-import static java.lang.Math.min;
 
 public class PrefixDuplicator implements Mutator {
 
 
 	@Override
-	public boolean appliesTo(Opcode code, Instruction instruction, ResourcePartition rp) {
+	public boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction) {
 		return isRex(instruction) || instruction.getRepePrefix() || instruction.getRepnePrefix() || instruction.getRepPrefix() || instruction.getLockPrefix() || instruction.getSegmentPrefix() != Register.NONE;
+	}
+
+	@Override
+	public boolean comesFrom(ResourcePartition rp, Opcode code, Instruction instruction, DeferredMutation outcome) {
+		return outcome instanceof PrefixDupeMutation;
 	}
 
 	private boolean isRex(Instruction insn) {
@@ -31,14 +35,29 @@ public class PrefixDuplicator implements Mutator {
 		return false;
 	}
 
-
-
 	@Override
-	public DeferredMutation createMutation(Instruction instruction, RandomGenerator rng, ResourcePartition rp) {
-		return new PrefixDupeMutation(instruction, rng);
+	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction) {
+		return new PrefixDupeMutation(instruction,
+			instruction.getRepePrefix() ? rng.nextInt(2) : 0,
+			instruction.getRepnePrefix() ? rng.nextInt(2) : 0,
+			instruction.getRepPrefix() ? rng.nextInt(2) : 0,
+			instruction.getLockPrefix() ? rng.nextInt(2) : 0,
+			instruction.getSegmentPrefix() != Register.NONE ? rng.nextInt(2) : 0,
+			rng.nextInt(2));
 	}
 
-	private byte[] duplicatePrefix(int duplicationCount, byte[] insnEncoded, byte prefix) {
+	@Override
+	public void reverse(ReverseRandomGenerator rng, ResourcePartition rp, Instruction instruction, DeferredMutation outcome) {
+		var mutation = (PrefixDupeMutation) outcome;
+		if (instruction.getRepePrefix()) rng.pushInt(mutation.repeDuplicationCount);
+		if (instruction.getRepnePrefix()) rng.pushInt(mutation.repneDuplicationCount);
+		if (instruction.getRepPrefix()) rng.pushInt(mutation.repDuplicationCount);
+		if (instruction.getLockPrefix()) rng.pushInt(mutation.lockDuplicationCount);
+		if (instruction.getSegmentPrefix() != Register.NONE) rng.pushInt(mutation.segmentDuplicationCount);
+		rng.pushInt(mutation.rexDuplicationCount);
+	}
+
+	private static byte[] duplicatePrefix(int duplicationCount, byte[] insnEncoded, byte prefix) {
 		int prefixCount = 0;
 		for (byte b : insnEncoded) {
 			if (isPrefix(b))
@@ -70,29 +89,14 @@ public class PrefixDuplicator implements Mutator {
 		return result;
 	}
 
-	private class PrefixDupeMutation implements DeferredMutation {
-		private final Instruction instruction;
-
-		private final int repeDuplicationCount, repneDuplicationCount, repDuplicationCount, lockDuplicationCount, segmentDuplicationCount, rexDuplicationCount;
-
-		public PrefixDupeMutation(Instruction instruction, RandomGenerator rng) {
-			this.instruction = instruction;
-
-			repeDuplicationCount = instruction.getRepePrefix() ? rng.nextInt(2) : 0;
-			repneDuplicationCount = instruction.getRepnePrefix() ? rng.nextInt(2) : 0;
-			repDuplicationCount = instruction.getRepPrefix() ? rng.nextInt(2) : 0;
-			lockDuplicationCount = instruction.getLockPrefix() ? rng.nextInt(2) : 0;
-			segmentDuplicationCount = instruction.getSegmentPrefix() != Register.NONE ? rng.nextInt(2) : 0;
-			rexDuplicationCount =  rng.nextInt(2);
-		}
-
+	private record PrefixDupeMutation(Instruction instruction, int repeDuplicationCount, int repneDuplicationCount, int repDuplicationCount, int lockDuplicationCount, int segmentDuplicationCount, int rexDuplicationCount)  implements DeferredMutation {
 		@Override
 		public byte[] perform(byte[] insnEncoded) {
-			insnEncoded = PrefixDuplicator.this.duplicatePrefix(repeDuplicationCount, insnEncoded, (byte) 0xF3);
-			insnEncoded = PrefixDuplicator.this.duplicatePrefix(repneDuplicationCount, insnEncoded, (byte) 0xF2);
-			insnEncoded = PrefixDuplicator.this.duplicatePrefix(repDuplicationCount, insnEncoded, (byte) 0xF3);
-			insnEncoded = PrefixDuplicator.this.duplicatePrefix(lockDuplicationCount, insnEncoded, (byte) 0xF0);
-			insnEncoded = PrefixDuplicator.this.duplicatePrefix(segmentDuplicationCount, insnEncoded, switch (instruction.getSegmentPrefix()) {
+			insnEncoded = duplicatePrefix(repeDuplicationCount, insnEncoded, (byte) 0xF3);
+			insnEncoded = duplicatePrefix(repneDuplicationCount, insnEncoded, (byte) 0xF2);
+			insnEncoded = duplicatePrefix(repDuplicationCount, insnEncoded, (byte) 0xF3);
+			insnEncoded = duplicatePrefix(lockDuplicationCount, insnEncoded, (byte) 0xF0);
+			insnEncoded = duplicatePrefix(segmentDuplicationCount, insnEncoded, switch (instruction.getSegmentPrefix()) {
 				case CS -> (byte) 0x2e;
 				case SS -> (byte) 0x36;
 				case DS -> (byte) 0x3e;
@@ -112,7 +116,7 @@ public class PrefixDuplicator implements Mutator {
 				}
 
 				if (rex != 0)
-					insnEncoded = PrefixDuplicator.this.duplicatePrefix(rexDuplicationCount, insnEncoded, rex);
+					insnEncoded = duplicatePrefix(rexDuplicationCount, insnEncoded, rex);
 			}
 
 			return insnEncoded;

@@ -5,7 +5,11 @@ import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.runtime.CPUState;
 import ax.xz.fuzz.runtime.ExecutionResult;
 import ax.xz.fuzz.runtime.Tester;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.MapperConfig;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.github.icedland.iced.x86.Code;
 import com.github.icedland.iced.x86.FlowControl;
 import com.github.icedland.iced.x86.Instruction;
@@ -22,8 +26,8 @@ import static ax.xz.fuzz.runtime.MemoryUtils.Protection.WRITE;
 import static ax.xz.fuzz.runtime.MemoryUtils.mmap;
 import static com.github.icedland.iced.x86.Code.*;
 
-record OpcodeCache(int version, Opcode[] opcodes) {
-	private static final Set<Integer> blacklistedOpcodes = Set.of(LSL_R16_RM16, LSL_R32_R32M16, LSL_R64_R64M16, CLZEROD, CLZEROW, CLZEROQ, CLUI, STUI, XGETBV, RDPKRU,WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
+public record OpcodeCache(int version, Opcode[] opcodes) {
+	private static final Set<Integer> blacklistedOpcodes = Set.of(XSAVE_MEM, XSAVES_MEM, XSAVEC_MEM, XSAVE64_MEM, XSAVEC64_MEM, XSAVES64_MEM, LSL_R16_RM16, LSL_R32_R32M16, LSL_R64_R64M16, CLZEROD, CLZEROW, CLZEROQ, CLUI, STUI, XGETBV, RDPKRU,WRPKRU, RDSEED_R16, RDSEED_R32, RDSEED_R64, RDTSC, RDTSCP, RDPMC, RDRAND_R16, RDRAND_R32, RDRAND_R64, XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM, RDPID_R32, RDPID_R64, RDPRU, XSAVEOPT_MEM, XSAVEOPT64_MEM);
 	private static final List<String> disallowedPrefixes = List.of("BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
 
 	private static final int OPCODES_CACHE_VERSION = blacklistedOpcodes.hashCode() ^ disallowedPrefixes.hashCode();
@@ -40,9 +44,23 @@ record OpcodeCache(int version, Opcode[] opcodes) {
 		}
 	}
 
+	public static ObjectMapper getMapper() {
+		var mapper = new ObjectMapper();
+		mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
+		mapper.activateDefaultTyping(BasicPolymorphicTypeValidator.builder()
+			.allowIfSubType(new BasicPolymorphicTypeValidator.TypeMatcher() {
+				@Override
+				public boolean match(MapperConfig<?> config, Class<?> clazz) {
+					return clazz.isSealed();
+				}
+			}).build(), ObjectMapper.DefaultTyping.OBJECT_AND_NON_CONCRETE);
+
+		return mapper;
+	}
+
 	private static Opcode[] loadCachedOpcodes() {
 		try {
-			var mapper = new ObjectMapper();
+			var mapper = getMapper();
 			var opcodes = mapper.readValue(OPCODES_CACHE_PATH.toFile(), OpcodeCache.class);
 			if (opcodes.version != OPCODES_CACHE_VERSION)
 				return null;
@@ -55,7 +73,8 @@ record OpcodeCache(int version, Opcode[] opcodes) {
 
 	private static void saveCachedOpcodes(Opcode[] opcodes) {
 		try {
-			var mapper = new ObjectMapper();
+			var mapper = getMapper();
+
 			mapper.writeValue(OPCODES_CACHE_PATH.toFile(), new OpcodeCache(OPCODES_CACHE_VERSION, opcodes));
 		} catch (Exception e) {
 			e.printStackTrace();

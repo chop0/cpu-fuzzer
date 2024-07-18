@@ -1,6 +1,6 @@
 package ax.xz.fuzz.encoding;
 
-import ax.xz.fuzz.blocks.BlockGenerator;
+import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.instruction.StatusFlag;
@@ -18,11 +18,11 @@ public sealed interface Operand {
 	}
 
 	sealed interface Counted extends ExplicitOperand {
-		void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException;
+		void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException;
 
 		record Reg(RegisterSet possibleRegisters) implements Counted {
 			@Override
-			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
+			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
 				instruction.setOpKind(operandIndex, OpKind.REGISTER);
 				instruction.setOpRegister(operandIndex, rp.selectRegister(possibleRegisters, random));
 			}
@@ -35,12 +35,12 @@ public sealed interface Operand {
 
 		record Mem(int bitSize) implements Counted {
 			@Override
-			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
+			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
 				instruction.setOpKind(operandIndex, OpKind.MEMORY);
 				instruction.setMemoryBase(NONE);
 				instruction.setMemoryIndex(NONE);
 				instruction.setMemoryDisplSize(4);
-				instruction.setMemoryDisplacement64(rp.randomMemoryAddress(random, byteSize(), 16, instruction.getMemoryDisplSize()));
+				instruction.setMemoryDisplacement64(rp.selectAddress(random, byteSize(), 16, instruction.getMemoryDisplSize()));
 			}
 
 			@Override
@@ -59,7 +59,7 @@ public sealed interface Operand {
 
 		record Imm(int bitSize, int immediateOpType) implements Counted {
 			@Override
-			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
+			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
 				instruction.setOpKind(operandIndex, immediateOpType);
 
 				long immediate = random.nextLong() >>> (64 - bitSize);
@@ -75,7 +75,7 @@ public sealed interface Operand {
 		// explicit because apparently the encoder includes this when finding the operand index
 		record FixedReg(int register) implements Counted {
 			@Override
-			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
+			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
 				instruction.setOpKind(operandIndex, OpKind.REGISTER);
 				instruction.setOpRegister(operandIndex, register);
 			}
@@ -90,7 +90,7 @@ public sealed interface Operand {
 		record FixedNumber(byte value) implements Counted {
 
 			@Override
-			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
+			public void setRandom(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
 				instruction.setOpKind(operandIndex, OpKind.IMMEDIATE8);
 				instruction.setImmediate8(value);
 			}
@@ -103,7 +103,7 @@ public sealed interface Operand {
 
 		record Moffs(int bitSize) implements Counted {
 			@Override
-			public void setRandom(RandomGenerator random, Instruction instruction, int operandIdx, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
+			public void setRandom(RandomGenerator random, Instruction instruction, int operandIdx, ResourcePartition rp) throws NoPossibilitiesException {
 				instruction.setOpKind(operandIdx, OpKind.MEMORY);
 				instruction.setMemoryDisplSize(4);
 				instruction.setMemoryDisplacement32(random.nextInt());
@@ -117,12 +117,12 @@ public sealed interface Operand {
 	}
 
 	sealed interface Uncounted extends ExplicitOperand {
-		void setRandom(RandomGenerator random, Instruction instruction, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException;
+		void setRandom(RandomGenerator random, Instruction instruction, ResourcePartition rp) throws NoPossibilitiesException;
 
 
 		record Mask(boolean zeroing) implements Uncounted {
 			@Override
-			public void setRandom(RandomGenerator random, Instruction instruction, ResourcePartition rp) throws BlockGenerator.NoPossibilitiesException {
+			public void setRandom(RandomGenerator random, Instruction instruction, ResourcePartition rp) throws NoPossibilitiesException {
 				instruction.setOpMask(rp.selectRegister(RegisterSet.MASK, random));
 				if (zeroing)
 					instruction.setZeroingMasking(random.nextBoolean());
