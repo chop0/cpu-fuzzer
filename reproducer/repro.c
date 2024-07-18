@@ -83,6 +83,6 @@ int main() {
 			return 0;
 		}
 	}
-	perror("failed to find a successful attempt");
+	fprintf(stderr, "ALL ATTEMPTS FAILED\n");
 	return 1;
 }
