@@ -14,7 +14,7 @@
 
 static uint8_t big_buffer[8192] = { 0 };
 
-static void *scratch1 = big_buffer, *scratch2 = big_buffer + 4096;
+static uint8_t *scratch1 = big_buffer, *scratch2 = big_buffer + 4096;
 
 #define TEST_INSTRUCTIONS(V) \
 	V("or %%r11, %%r11") \
@@ -68,6 +68,7 @@ static void reproducer_intrinsics(uint8_t const *input, uint8_t *output) {
 }
 
 int main() {
+	printf("%hhx%hhx\n", *scratch1, *scratch2);
 	srand(0);
 
 	uint8_t test_input[64];
@@ -76,11 +77,11 @@ int main() {
 	}
 
 	for (int r = 0; r < 100; r++) {
-		uint8_t intrinsics_result[32], test_result[32], serialized_result[32];
+		uint8_t intrinsics_result[32], broken_result[32], serialized_result[32];
 
 		reproducer_intrinsics(test_input, intrinsics_result);
 		reproducer_poc(true, test_input, serialized_result);
-		reproducer_poc(false, test_input, test_result);
+		reproducer_poc(false, test_input, broken_result);
 
 		printf(
 			"attempt %d results:\n"
@@ -88,10 +89,10 @@ int main() {
 			"\tintrinsics result:\t" HEXFMT32 "\n"
 			"\tpoc w/ fences result:\t" HEXFMT32 "\n"
 			"\tpoc w/o fences result:\t" HEXFMT32 "\n",
-		r, HEXARGS32(test_input, 0), HEXARGS32(intrinsics_result, 0), HEXARGS32(serialized_result, 0), HEXARGS32(test_result, 0)
+		r, HEXARGS32(test_input, 0), HEXARGS32(intrinsics_result, 0), HEXARGS32(serialized_result, 0), HEXARGS32(broken_result, 0)
 		);
 
-		bool correct_result = memcmp(test_result, intrinsics_result, 32) == 0;
+		bool correct_result = memcmp(broken_result, intrinsics_result, 32) == 0;
 		if (!correct_result) {
 			printf("attempt %d SUCCESS: found an attempt where xmm24 was NOT what we expected\n", r);
 			return 0;
