@@ -59,17 +59,28 @@ static __m128 reproducer_intrinsics(__m128 input) {
 	return result;
 }
 
+static __m128 random_m128() {
+	uint32_t buf[4] __attribute__((aligned(16)));
+	for (int i = 0; i < 4; i++) {
+		buf[i] = rand();
+	}
+
+	return *((__m128*) buf);
+}
+
+static bool m128_eq(__m128 a, __m128 b) {
+	__m128 vcmp = _mm_cmpneq_ps(a, b);
+	uint16_t test = _mm_movemask_epi8((__m128i) vcmp);
+	return test == 0;
+}
+
 int main() {
 	printf("%hhx%hhx\n", *scratch1, *scratch2);
+
 	srand(0);
 
-	uint8_t test_input[32];
-	for (int i = 0; i < sizeof(test_input); i++) {
-		test_input[i] = rand() & 0xff;
-	}
-	__m128 input = *((__m128*) test_input);
-
 	for (int r = 0; r < 100; r++) {
+		__m128 input = random_m128();
 		__m128 intrinsics_result = reproducer_intrinsics(input);
 		__m128 serialized_result = reproducer_poc(true, input);
 		__m128 broken_result = reproducer_poc(false, input);
@@ -80,11 +91,10 @@ int main() {
 			"\tintrinsics result:\t" HEXFMT16 "\n"
 			"\tpoc w/ fences result:\t" HEXFMT16 "\n"
 			"\tpoc w/o fences result:\t" HEXFMT16 "\n",
-		r, HEXARGS16(test_input, 0), HEXARGS16(intrinsics_result, 0), HEXARGS16(serialized_result, 0), HEXARGS16(broken_result, 0)
+		r, HEXARGS16(input, 0), HEXARGS16(intrinsics_result, 0), HEXARGS16(serialized_result, 0), HEXARGS16(broken_result, 0)
 		);
 
-		bool correct_result = memcmp(&broken_result, &intrinsics_result, sizeof(broken_result)) == 0;
-		if (!correct_result) {
+		if (!m128_eq(broken_result, intrinsics_result)) {
 			printf("attempt %d SUCCESS: found an attempt where xmm24 was NOT what we expected\n", r);
 			return 0;
 		} else {
