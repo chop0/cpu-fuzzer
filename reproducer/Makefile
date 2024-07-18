@@ -4,7 +4,7 @@ all: repro
 	./repro
 
 repro: repro.c libslave.so
-	gcc -o repro repro.c -I.. -L. -lslave -Wl,-rpath,.
+	gcc -g -o repro repro.c -I.. -L. -lslave -Wl,-rpath,.
 
 libslave.so:
 	make -C .. libslave.so
