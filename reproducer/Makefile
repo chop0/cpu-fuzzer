@@ -1,15 +1,10 @@
-.PHONY: all clean libslave.so
+.PHONY: all clean
 
 all: repro
 	./repro
 
-repro: repro.c libslave.so
-	gcc -g -o repro repro.c -I.. -L. -lslave -Wl,-rpath,.
-
-libslave.so:
-	make -C .. libslave.so
-	cp ../libslave.so .
+repro: repro.c
+	gcc -g -o repro repro.c -march=native
 
 clean:
-	rm -f repro libslave.so
-	make -C .. clean
+	rm -f repro
