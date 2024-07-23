@@ -4,6 +4,7 @@ import ax.xz.fuzz.tester.saved_state;
 
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.RecordComponent;
@@ -16,11 +17,24 @@ import java.util.random.RandomGenerator;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 
+import static ax.xz.fuzz.tester.slave_h.*;
+import static java.lang.foreign.MemoryLayout.sequenceLayout;
+import static java.lang.foreign.MemoryLayout.structLayout;
 import static java.lang.foreign.ValueLayout.*;
 
 // TODO: include segment registers
 public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXRegisters mmx, long rflags) {
-	private static final MemoryLayout ZMM = MemoryLayout.sequenceLayout(64, JAVA_BYTE);
+	private static final MemoryLayout ZMM = sequenceLayout(64, JAVA_BYTE);
+
+	@Override
+	public boolean equals(Object obj) {
+		if (obj == this) return true;
+		if (!(obj instanceof CPUState that)) return false;
+
+		return gprs.equals(that.gprs)
+		       && zmm.equals(that.zmm)
+		       && mmx.equals(that.mmx);
+	}
 
 	public static CPUState ofSavedState(MemorySegment savedState) {
 		return new CPUState(

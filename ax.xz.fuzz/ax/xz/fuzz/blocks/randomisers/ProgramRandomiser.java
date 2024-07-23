@@ -235,14 +235,14 @@ public class ProgramRandomiser {
 	}
 
 	public Map.Entry<ResourcePartition, ResourcePartition> selectResourceSplit(RandomGenerator rng, ResourcePartition partition) {
-		var lhsRegisters = new BitSet();
-		var rhsRegisters = new BitSet();
+		var lhsRegisters = new RegisterSet();
+		var rhsRegisters = new RegisterSet();
 
 		var universe = partition.allowedRegisters();
 		for (var bank : RegisterSet.bankSets) {
 			var dst = rng.nextBoolean() ? lhsRegisters : rhsRegisters;
 			for (int n : bank.intersection(universe)) {
-				dst.set(n);
+				dst.setInPlace(n, true);
 			}
 		}
 
@@ -253,8 +253,8 @@ public class ProgramRandomiser {
 		var memorySplit = selectMemorySplit(rng, partition.memory());
 
 		return Map.entry(
-			new ResourcePartition(lhsFlags, new RegisterSet(lhsRegisters), memorySplit.getKey()),
-			new ResourcePartition(EnumSet.complementOf(lhsFlags), new RegisterSet(rhsRegisters), memorySplit.getValue())
+			new ResourcePartition(lhsFlags, lhsRegisters, memorySplit.getKey()),
+			new ResourcePartition(EnumSet.complementOf(lhsFlags), rhsRegisters, memorySplit.getValue())
 		);
 	}
 

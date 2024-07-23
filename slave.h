@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include "cpu_state.h"
 
 #ifdef __AVX512F__
 #define EVEX
@@ -33,7 +34,7 @@ struct saved_state {
     uint8_t zmm [32][64];
     uint64_t mm[8];
     uint64_t rflags;
-} ;
+}  __attribute__((aligned(16)));
 
 struct fault_details {
     void *fault_address;

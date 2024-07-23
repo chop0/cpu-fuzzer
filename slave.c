@@ -117,7 +117,7 @@ static void maybe_cpu_fuzzer_setup(void) {
     signal_stack_region = mmap(NULL, 2 * SIGSTKSZ * MAX_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     for (int i = 0; i < MAX_THREADS; i++) {
-        active_thread_info[i].sigstk_address = signal_stack_region + 2 * i * SIGSTKSZ + SIGSTKSZ - 16;
+        active_thread_info[i].sigstk_address = signal_stack_region + 2 * i * SIGSTKSZ;
     }
 
     setup_signal_handlers();
@@ -144,7 +144,8 @@ thread_info_t* maybe_allocate_signal_stack(void) {
 
     stack_t ss;
     ss.ss_sp = active_thread_info[my_thread_idx].sigstk_address;
-    ss.ss_size = SIGSTKSZ;
+    assert(ss.ss_sp);
+    ss.ss_size = SIGSTKSZ*2;
     ss.ss_flags = 0;
     if (sigaltstack(&ss, NULL) == -1) {
         perror("sigaltstack");

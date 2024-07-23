@@ -11,7 +11,10 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.SplittableRandom;
 import java.util.function.BiFunction;
 import java.util.random.RandomGenerator;
@@ -36,7 +39,7 @@ public class Tester {
 	private final MemorySegment code;
 
 	private final ProgramRandomiser randomiser = new ProgramRandomiser();
-	private final ResourcePartition masterPartition;
+	 final ResourcePartition masterPartition;
 
 	private final RandomGenerator rng = new SplittableRandom();
 
@@ -48,12 +51,50 @@ public class Tester {
 
 		this.trampoline = Trampoline.create(arena);
 
-		this.masterPartition = new ResourcePartition(StatusFlag.all(), RegisterSet.ALL_EVEX.subtract(BANNED_REGISTERS), MemoryPartition.of(scratch1, scratch2));
+		this.masterPartition = new ResourcePartition(StatusFlag.all(), RegisterSet.ALL_VEX.subtract(BANNED_REGISTERS), MemoryPartition.of(scratch1, scratch2));
+	}
+
+	public Tester(Trampoline trampoline, MemorySegment scratch1, MemorySegment scratch2, MemorySegment code, ResourcePartition masterPartition) {
+		this.trampoline = trampoline;
+		this.scratch1 = scratch1;
+		this.scratch2 = scratch2;
+		this.code = code;
+		this.masterPartition = masterPartition;
+	}
+
+	public static Tester create(RegisterSet registers, EnumSet<StatusFlag> flags) {
+		class holder {
+			private static final VarHandle indexHandle;
+			static {
+				try {
+					indexHandle = MethodHandles.lookup().findStaticVarHandle(holder.class, "index", long.class);
+				} catch (NoSuchFieldException | IllegalAccessException e) {
+					throw new AssertionError(e);
+				}
+			}
+
+			private static volatile long index = 0;
+			private static long nextIndex() {
+				return (long) indexHandle.getAndAdd(1);
+			}
+		}
+
+		long index = holder.nextIndex();
+
+		var arena = Arena.ofAuto();
+		var scratch1 = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x110000 + index * 4096L * 2), 4096, READ, WRITE);
+		var scratch2 = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x210000 + index * 4096L * 2), 4096, READ, WRITE);
+		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
+
+		var trampoline = Trampoline.create(arena);
+
+		var masterPartition = new ResourcePartition(flags, registers.subtract(BANNED_REGISTERS), MemoryPartition.of(scratch1, scratch2));
+		return new Tester(trampoline, scratch1, scratch2, code, masterPartition);
 	}
 
 	private static final Object printLock = new Object();
 
-	public ExecutionResult[] runTest() throws NoPossibilitiesException {
+	public ExecutionResult[] runTest() {
 		var tc = randomiser.selectTestCase(rng, masterPartition);
 		var results = new ExecutionResult[tc.sequences().length];
 
@@ -93,7 +134,7 @@ public class Tester {
 					var mapper = OpcodeCache.getMapper();
 					String value = null;
 					try {
-						value = mapper.writeValueAsString(tc.initialState());
+						value = mapper.writeValueAsString(minimised.initialState());
 					} catch (JsonProcessingException e) {
 						throw new RuntimeException(e);
 					}
@@ -125,7 +166,7 @@ public class Tester {
 	private record SequenceResult(MemorySegment codeSlice, ExecutionResult result) {
 	}
 
-	private InvarianceTestCase minimise(InvarianceTestCase tc) {
+	public InvarianceTestCase minimise(InvarianceTestCase tc) {
 		if (tc.sequences().length != 2)
 			throw new IllegalArgumentException("Can only minimise two-sequence test cases");
 

@@ -46,6 +46,7 @@
     </orderEntry>
     <orderEntry type="library" name="jackson-databind-2.17.2" level="project" />
     <orderEntry type="library" name="jackson-annotations-2.17.2" level="project" />
+    <orderEntry type="library" name="iced-x86-1.21.0" level="project" />
   </component>
   <component name="SonarLintModuleSettings">
     <option name="uniqueId" value="574ed939-13f9-4234-b3b4-f9c5917c8bf8" />

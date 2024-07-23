@@ -6,7 +6,6 @@ import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Iterator;
-import java.util.Objects;
 import java.util.random.RandomGenerator;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
@@ -16,9 +15,11 @@ import static com.github.icedland.iced.x86.Register.*;
 import static java.util.stream.IntStream.rangeClosed;
 
 public final class RegisterSet implements Iterable<Integer> {
+	private static final int NUM_WORDS = 5;
+
 	public static RegisterSet GPB = RegisterSet.of(rangeClosed(AL, R15L).toArray());
 	public static RegisterSet GPW = RegisterSet.of(rangeClosed(AX, R15W).toArray());
-	public static RegisterSet GPD = RegisterSet.of(rangeClosed(EAX, R15D).toArray());
+	public static RegisterSet GPD = RegisterSet.of(rangeClosed(EAX , R15D).toArray());
 	public static RegisterSet GPQ = RegisterSet.of(rangeClosed(RAX, R15).toArray());
 	public static RegisterSet GP = GPB.union(GPW).union(GPD).union(GPQ);
 
@@ -59,11 +60,11 @@ public final class RegisterSet implements Iterable<Integer> {
 
 
 	public static RegisterSet of(int... registers) {
-		return new RegisterSet(Arrays.stream(registers).collect(BitSet::new, BitSet::set, BitSet::or));
+		return Arrays.stream(registers).boxed().collect(RegisterSet.collector());
 	}
 
 	public static RegisterSet ofRange(int startInclusive, int endInclusive) {
-		return new RegisterSet(rangeClosed(startInclusive, endInclusive).collect(BitSet::new, BitSet::set, BitSet::or));
+		return rangeClosed(startInclusive, endInclusive).boxed().collect(RegisterSet.collector());
 	}
 
 	public static RegisterSet generalPurpose(int size) {
@@ -86,73 +87,151 @@ public final class RegisterSet implements Iterable<Integer> {
 		};
 	}
 
-	public static Collector<Integer, BitSet, RegisterSet> collector() {
-		return Collector.of(BitSet::new, BitSet::set, (bs1, bs2) -> {
-			bs1.or(bs2);
-			return bs1;
-		}, RegisterSet::new);
+	public static Collector<Integer, RegisterSet, RegisterSet> collector() {
+		return Collector.of(RegisterSet::new, (rs, idx) -> rs.setInPlace(idx, true), RegisterSet::union);
 	}
 
-	private final BitSet registers;
+	private final long[] data;
 
-	public RegisterSet(BitSet registers) {
-		this.registers = registers;
+	private RegisterSet(long[] data) {
+		this.data = data;
+	}
+
+	public RegisterSet() {
+		this(new long[NUM_WORDS]);
+	}
+
+	public void setInPlace(int register, boolean value) {
+		register -= 1;
+
+		int address = bitAddress(register);
+		int index = bitIndex(register);
+		if (value) {
+			data[address] |= 1L << index;
+		} else {
+			data[address] &= ~(1L << index);
+		}
+	}
+
+	private int bitIndex(int register) {
+		return register & 0b111111;
+	}
+
+	private int bitAddress(int register) {
+		return register >> 6;
 	}
 
 	public boolean hasRegister(int register) {
-		return registers.get(register);
+		register -= 1;
+
+		int address = bitAddress(register);
+		int index = bitIndex(register);
+		return (data[address] & (1L << index)) != 0;
 	}
 
 	public RegisterSet intersection(RegisterSet other) {
-		var bs = new BitSet();
-		bs.or(registers);
-		bs.and(other.registers);
+		var result = new long[NUM_WORDS];
+		for (int i = 0; i < NUM_WORDS; i++) {
+			result[i] = data[i] & other.data[i];
+		}
 
-		return new RegisterSet(bs);
+		return new RegisterSet(result);
 	}
 
 	public boolean intersects(RegisterSet other) {
-		return registers.intersects(other.registers);
+		for (int i = 0; i < NUM_WORDS; i++) {
+			if ((data[i] & other.data[i]) != 0) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public RegisterSet union(RegisterSet other) {
-		var newSet = copyOf();
-		newSet.registers.or(other.registers);
+		var result = new long[NUM_WORDS];
+		for (int i = 0; i < NUM_WORDS; i++) {
+			result[i] = data[i] | other.data[i];
+		}
 
-		return newSet;
-	}
-
-	private RegisterSet copyOf() {
-		var bs = new BitSet();
-		bs.or(registers);
-
-		return new RegisterSet(bs);
+		return new RegisterSet(result);
 	}
 
 	public boolean isEmpty() {
-		return registers.isEmpty();
+		for (int i = 0; i < NUM_WORDS; i++) {
+			if (data[i] != 0) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private int nextSetBit(int startIndex) {
+		int address = bitAddress(startIndex);
+		int index = bitIndex(startIndex);
+
+		long current = data[address] >> index;
+		if (current != 0) {
+			return startIndex + Long.numberOfTrailingZeros(current);
+		}
+
+		for (int i = address + 1; i < data.length; i++) {
+			if (data[i] != 0) {
+				return (i << 6) + Long.numberOfTrailingZeros(data[i]);
+			}
+		}
+
+		return -1;
+	}
+
+	private int nextClearBit(int startIndex) {
+		int address = bitAddress(startIndex);
+		int index = bitIndex(startIndex);
+
+		long current = ~data[address] >> index;
+		if (current != 0) {
+			return startIndex + Long.numberOfTrailingZeros(current);
+		}
+
+		for (int i = address + 1; i < data.length; i++) {
+			if (data[i] != -1) {
+				return (i << 2) + Long.numberOfTrailingZeros(~data[i]);
+			}
+		}
+
+		return -1;
+	}
+
+	public int size() {
+		int count = 0;
+		for (int i = 0; i < NUM_WORDS; i++) {
+			count += Long.bitCount(data[i]);
+		}
+		return count;
 	}
 
 	public int select(RandomGenerator randomGenerator) {
 		if (isEmpty())
 			throw new IllegalStateException("Cannot choose from empty register set");
 
-		int currentIndex = registers.nextSetBit(0);
-		int bound = randomGenerator.nextInt(registers.cardinality());
+		int currentIndex = nextSetBit(0);
+		int bound = randomGenerator.nextInt(size()) - 1;
 
 		for (int i = 0; i < bound; i++) {
-			currentIndex = registers.nextSetBit(currentIndex + 1);
+			currentIndex = nextSetBit(currentIndex + 1);
 		}
 
-		return currentIndex;
+		return currentIndex + 1;
 	}
 
 	public void reverse(ReverseRandomGenerator random, int outcome) {
-		int currentIndex = registers.nextSetBit(0);
+		outcome -= 1;
+
+		int currentIndex = nextSetBit(0);
 		int bound = 0;
 
 		while (currentIndex != outcome) {
-			currentIndex = registers.nextSetBit(currentIndex + 1);
+			currentIndex = nextSetBit(currentIndex + 1);
 			bound++;
 		}
 
@@ -160,19 +239,18 @@ public final class RegisterSet implements Iterable<Integer> {
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {
-		var vectorBlocks = startRegisters.registers.stream()
-				.filter(startIndex -> this.registers.nextClearBit(startIndex) - startIndex >= blockSize)
-				.collect(BitSet::new, BitSet::set, BitSet::or);
 
-		return new RegisterSet(vectorBlocks);
+		return startRegisters.stream().map(i -> i - 1)
+				.filter(startIndex -> this.nextClearBit(startIndex) - startIndex >= blockSize).boxed()
+				.collect(collector());
 	}
 
 	public IntStream stream() {
-		return registers.stream();
+		return IntStream.iterate(nextSetBit(0), i -> i != -1, i -> nextSetBit(i + 1 )).map(i -> i + 1);
 	}
 
 	public int first() {
-		return registers.nextSetBit(0);
+		return nextSetBit(0) + 1;
 	}
 
 	@Override
@@ -180,25 +258,28 @@ public final class RegisterSet implements Iterable<Integer> {
 		if (obj == this) return true;
 		if (obj == null || obj.getClass() != this.getClass()) return false;
 		var that = (RegisterSet) obj;
-		return Objects.equals(this.registers, that.registers);
+		return Arrays.equals(this.data, that.data);
 	}
 
 	@Override
 	public int hashCode() {
-		return registers.hashCode();
+		return Arrays.hashCode(data);
 	}
 
 	@Override
 	public String toString() {
-		return registers.stream()
+		return stream()
 				.mapToObj(Registers::byValue)
 				.collect(Collectors.joining(", ", "{", "}"));
 	}
 
 	public RegisterSet subtract(RegisterSet rhs) {
-		var newSet = copyOf();
-		newSet.registers.andNot(rhs.registers);
-		return newSet;
+		var result = new long[NUM_WORDS];
+		for (int i = 0; i < NUM_WORDS; i++) {
+			result[i] = data[i] & ~rhs.data[i];
+		}
+
+		return new RegisterSet(result);
 	}
 
 	public static final int[][] banks = {{AL, AH, AX, EAX, RAX},
@@ -275,6 +356,6 @@ public final class RegisterSet implements Iterable<Integer> {
 
 	@Override
 	public Iterator<Integer> iterator() {
-		return registers.stream().iterator();
+		return stream().iterator();
 	}
 }

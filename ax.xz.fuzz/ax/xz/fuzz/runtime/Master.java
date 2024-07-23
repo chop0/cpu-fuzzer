@@ -1,6 +1,8 @@
 package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.blocks.NoPossibilitiesException;
+import ax.xz.fuzz.instruction.RegisterSet;
+import ax.xz.fuzz.instruction.StatusFlag;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -33,7 +35,7 @@ public class Master {
 			synchronized (printLock) {
 				System.out.println("Starting thread " + i);
 			}
-			var tester = new Tester(i);
+			var tester = Tester.create(RegisterSet.ALL_EVEX, StatusFlag.all());
 
 			while (!Thread.interrupted()) {
 				var results = tester.runTest();

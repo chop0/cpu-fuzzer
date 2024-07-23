@@ -18,7 +18,7 @@ import static java.util.Objects.requireNonNull;
 
 public record MemoryPartition(long[] offsets, MemorySegment... ms) {
 	private static final MemoryPartition ADDRESS_SPACE = new MemoryPartition(MemorySegment.ofAddress(0).reinterpret(Long.MAX_VALUE));
-	private static final MemoryPartition EMPTY = new MemoryPartition(new long[0], new MemorySegment[0]);
+	private static final MemoryPartition EMPTY = new MemoryPartition(new long[0]);
 
 	public static MemoryPartition empty() {
 		return EMPTY;

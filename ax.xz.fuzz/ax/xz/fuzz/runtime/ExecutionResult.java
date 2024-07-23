@@ -8,8 +8,11 @@ import java.lang.foreign.MemorySegment;
 
 public sealed interface ExecutionResult {
 	public static boolean interestingMismatch(ExecutionResult a, ExecutionResult b) {
-		if (a instanceof Success me && b instanceof Success otherSuccess) {
-			return !me.state.gprs().equals(otherSuccess.state.gprs()) || !me.state.zmm().equals(otherSuccess.state().zmm()) || !me.state.mmx().equals(otherSuccess.state.mmx());
+		if (a instanceof Success A && b instanceof Success B) {
+			return A.state().gprs().r15() == B.state().gprs().r15() &&
+			       (!A.state().gprs().equals(B.state().gprs())
+			       || !A.state().zmm().equals(B.state().zmm())
+			       || !A.state().mmx().equals(B.state().mmx()));
 		}
 
 		return false;
