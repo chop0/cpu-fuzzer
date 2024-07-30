@@ -5,6 +5,7 @@ import ax.xz.fuzz.instruction.*;
 import ax.xz.fuzz.mutate.*;
 import ax.xz.fuzz.runtime.Branch;
 import ax.xz.fuzz.runtime.CPUState;
+import ax.xz.fuzz.runtime.Config;
 import ax.xz.fuzz.runtime.ExecutableSequence;
 import ax.xz.fuzz.tester.saved_state;
 import com.github.icedland.iced.x86.Instruction;
@@ -15,14 +16,11 @@ import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.random.RandomGenerator;
 
+import static com.github.icedland.iced.x86.Register.RSP;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 public class ProgramRandomiser {
-	public static final int MAX_INSTRUCTIONS = System.getenv("MAX_INSTRUCTIONS") == null ? 10 : Integer.parseInt(System.getenv("MAX_INSTRUCTIONS"));
-	public static final int TRIALS = System.getenv("TRIALS") == null ? 2 : Integer.parseInt(System.getenv("TRIALS"));
-	public static final int NUM_BLOCKS = System.getenv("NUM_BLOCKS") == null ? 5 : Integer.parseInt(System.getenv("NUM_BLOCKS"));
-
-	public static final int MEMORY_GRANULARITY = 256;
+	public static final int MEMORY_GRANULARITY = 64;
 
 	public static final Mutator[] mutators = {
 		new PrefixAdder(),
@@ -33,56 +31,41 @@ public class ProgramRandomiser {
 
 	private static Opcode[] allOpcodes;
 	private static Map<Opcode, Integer> opcodeIndices;
-
 	private static final ReentrantLock lock = new ReentrantLock();
 
-	private static Opcode[] allOpcodes() {
-		if (allOpcodes == null) {
-			lock.lock();
-			try {
-				if (allOpcodes == null) {
-					allOpcodes = OpcodeCache.loadOpcodes();
-				}
-			} finally {
-				lock.unlock();
-			}
+	private final Config config;
+	private final Map.Entry<ResourcePartition, ResourcePartition>[] resourceSplitCandidates;
+	private final Map<Map.Entry<ResourcePartition, ResourcePartition>, Integer> resourceSplitCandidatesIndices;
+	private final ResourcePartition partition;
+
+	public ProgramRandomiser(Config config, ResourcePartition partition) {
+		this.config = config;
+		this.partition = partition;
+		this.resourceSplitCandidates = new Map.Entry[32];
+
+		var indices = new HashMap<Map.Entry<ResourcePartition, ResourcePartition>, Integer>();
+		var random = new SplittableRandom();
+		for (int i = 0; i < resourceSplitCandidates.length; i++) {
+			resourceSplitCandidates[i] = selectResourceSplit0(random, partition);
+			indices.put(resourceSplitCandidates[i], i);
 		}
 
-		return allOpcodes;
+		this.resourceSplitCandidatesIndices = Collections.unmodifiableMap(indices);
 	}
 
-	private static Map<Opcode, Integer> opcodeIndices() {
-		if (opcodeIndices == null) {
-			lock.lock();
-			try {
-				if (opcodeIndices == null) {
-					var indices = new HashMap<Opcode, Integer>();
-					for (int i = 0; i < allOpcodes().length; i++) {
-						indices.put(allOpcodes()[i], i);
-					}
+	public InvarianceTestCase selectTestCase(RandomGenerator rng) {
+		var pairs = selectBlockPairs(rng, config.blockCount());
+		var branches = selectBranches(rng, config.blockCount());
 
-					opcodeIndices = Collections.unmodifiableMap(indices);
-				}
-			} finally {
-				lock.unlock();
-			}
-		}
-		return opcodeIndices;
-	}
-
-	public InvarianceTestCase selectTestCase(RandomGenerator rng, ResourcePartition partition) {
-		var pairs = selectBlockPairs(rng, partition, NUM_BLOCKS);
-		var branches = selectBranches(rng, NUM_BLOCKS);
-
-		var sequences = new ExecutableSequence[TRIALS];
-		for (int i = 0; i < TRIALS; i++) {
+		var sequences = new ExecutableSequence[2];
+		for (int i = 0; i < 2; i++) {
 			sequences[i] = selectSequence(rng, pairs, branches);
 		}
 
-		return new InvarianceTestCase(pairs, branches, sequences, selectCPUState(rng, partition));
+		return new InvarianceTestCase(pairs, branches, sequences, selectCPUState(rng));
 	}
 
-	public void reverseTestCase(ReverseRandomGenerator rng, ResourcePartition partition, InvarianceTestCase outcome) {
+	public void reverseTestCase(ReverseRandomGenerator rng, InvarianceTestCase outcome) {
 		reverseBlockPairs(rng, outcome.pairs());
 		reverseBranches(rng, outcome.branches());
 
@@ -90,22 +73,28 @@ public class ProgramRandomiser {
 			reverseSequence(rng, outcome.pairs(), outcome.branches(), sequence);
 		}
 
-		reverseCPUState(rng, partition, outcome.initialState());
+		reverseCPUState(rng, outcome.initialState());
 	}
 
-	public CPUState selectCPUState(RandomGenerator rng, ResourcePartition partition) {
-		var data = MemorySegment.ofArray(new long[(int) saved_state.sizeof()/8]);
-		data.spliterator(JAVA_LONG).forEachRemaining(n -> n.set(JAVA_LONG, 0, selectInterestingValue(rng, partition)));
-		return CPUState.ofSavedState(data);
+	public CPUState selectCPUState(RandomGenerator rng) {
+		var data = MemorySegment.ofArray(new long[(int) saved_state.sizeof() / 8]);
+		data.spliterator(JAVA_LONG).forEachRemaining(n -> n.set(JAVA_LONG, 0, selectInterestingValue(rng)));
+		var state = CPUState.ofSavedState(data);
+		return new CPUState(
+			state.gprs().withRsp(partition.stack().address() + partition.stack().address()/2),
+			state.zmm(),
+			state.mmx(),
+			state.rflags() & ~((1 << 8) | (1 << 18)) // mask off TF and AC
+		);
 	}
 
-	public void reverseCPUState(ReverseRandomGenerator rng, ResourcePartition partition, CPUState outcome) {
-		var data = MemorySegment.ofArray(new long[(int) saved_state.sizeof()/8]);
+	public void reverseCPUState(ReverseRandomGenerator rng, CPUState outcome) {
+		var data = MemorySegment.ofArray(new long[(int) saved_state.sizeof() / 8]);
 		outcome.toSavedState(data);
-		data.spliterator(JAVA_LONG).forEachRemaining(n -> reverseInterestingValue(rng, partition, n.get(JAVA_LONG, 0)));
+		data.spliterator(JAVA_LONG).forEachRemaining(n -> reverseInterestingValue(rng, n.get(JAVA_LONG, 0)));
 	}
 
-	public long selectInterestingValue(RandomGenerator rng, ResourcePartition partition) {
+	public long selectInterestingValue(RandomGenerator rng) {
 		boolean useMemory = rng.nextBoolean();
 
 		if (useMemory && !partition.memory().isEmpty())
@@ -117,7 +106,7 @@ public class ProgramRandomiser {
 		return rng.nextLong();
 	}
 
-	public void reverseInterestingValue(ReverseRandomGenerator rng, ResourcePartition partition, long outcome) {
+	public void reverseInterestingValue(ReverseRandomGenerator rng, long outcome) {
 		boolean useMemory = partition.memory().contains(outcome, MEMORY_GRANULARITY);
 		rng.pushBoolean(useMemory);
 
@@ -178,10 +167,10 @@ public class ProgramRandomiser {
 		}
 	}
 
-	public BlockPair[] selectBlockPairs(RandomGenerator rng, ResourcePartition partition, int blockCount) {
+	public BlockPair[] selectBlockPairs(RandomGenerator rng, int blockCount) {
 		var pairs = new BlockPair[blockCount];
 		for (int i = 0; i < blockCount; i++) {
-			pairs[i] = selectBlockPair(rng, partition);
+			pairs[i] = selectBlockPair(rng);
 		}
 		return pairs;
 	}
@@ -220,8 +209,8 @@ public class ProgramRandomiser {
 		rng.pushInt(outcome.notTakenIndex());
 	}
 
-	public BlockPair selectBlockPair(RandomGenerator rng, ResourcePartition partition) {
-		var resources = selectResourceSplit(rng, partition);
+	public BlockPair selectBlockPair(RandomGenerator rng) {
+		var resources = selectResourceSplit(rng);
 		var lhs = selectBlock(rng, resources.getKey());
 		var rhs = selectBlock(rng, resources.getValue());
 
@@ -234,73 +223,55 @@ public class ProgramRandomiser {
 		reverseBlock(rng, outcome.rhsPartition(), outcome.rhs());
 	}
 
-	public Map.Entry<ResourcePartition, ResourcePartition> selectResourceSplit(RandomGenerator rng, ResourcePartition partition) {
-		var lhsRegisters = new RegisterSet();
-		var rhsRegisters = new RegisterSet();
+	public Map.Entry<ResourcePartition, ResourcePartition> selectResourceSplit(RandomGenerator rng) {
+		return resourceSplitCandidates[rng.nextInt(resourceSplitCandidates.length)];
+
+	}
+
+	private Map.Entry<ResourcePartition, ResourcePartition> selectResourceSplit0(RandomGenerator rng, ResourcePartition partition) {
+		var lhsRegisters = RegisterSet.of();
+		var rhsRegisters = RegisterSet.of();
 
 		var universe = partition.allowedRegisters();
 		for (var bank : RegisterSet.bankSets) {
-			var dst = rng.nextBoolean() ? lhsRegisters : rhsRegisters;
-			for (int n : bank.intersection(universe)) {
-				dst.setInPlace(n, true);
-			}
+			if (rng.nextBoolean())
+				lhsRegisters = lhsRegisters.union(bank.intersection(universe));
+			else
+				rhsRegisters = rhsRegisters.union(bank.intersection(universe));
 		}
 
 		var lhsFlags = EnumSet.noneOf(StatusFlag.class);
 		if (rng.nextBoolean())
 			Collections.addAll(lhsFlags, StatusFlag.values());
 
-		var memorySplit = selectMemorySplit(rng, partition.memory());
+		var memorySplit = selectMemorySplit(rng);
 
 		return Map.entry(
-			new ResourcePartition(lhsFlags, lhsRegisters, memorySplit.getKey()),
-			new ResourcePartition(EnumSet.complementOf(lhsFlags), rhsRegisters, memorySplit.getValue())
+			new ResourcePartition(lhsFlags, lhsRegisters, memorySplit.getKey(), lhsRegisters.hasRegister(RSP) ? partition.stack() : MemorySegment.NULL),
+			new ResourcePartition(EnumSet.complementOf(lhsFlags), rhsRegisters, memorySplit.getValue(), rhsRegisters.hasRegister(RSP) ? partition.stack() : MemorySegment.NULL)
 		);
 	}
 
 	public void reverseResourceSplit(ReverseRandomGenerator rng, ResourcePartition lhs, ResourcePartition rhs) {
-		for (var bank : RegisterSet.bankSets) {
-			rng.pushBoolean( lhs.allowedRegisters().intersects(bank));
-		}
-
-		rng.pushBoolean(lhs.statusFlags().containsAll(rhs.statusFlags()));
-		reverseMemorySplit(rng, lhs.memory(), rhs.memory());
+		rng.pushInt(resourceSplitCandidatesIndices.get(Map.entry(lhs, rhs)));
 	}
 
-	public Map.Entry<MemoryPartition, MemoryPartition> selectMemorySplit(RandomGenerator rng, MemoryPartition partition) {
-		long totalSize = partition.byteSize();
-		long segmentCountEst = totalSize / MEMORY_GRANULARITY;
+	public Map.Entry<MemoryPartition, MemoryPartition> selectMemorySplit(RandomGenerator rng) {
+		long totalSize = partition.memory().byteSize();
 
-		var lhsSegments = new ArrayList<MemorySegment>((int) (segmentCountEst / 2));
-		var rhsSegments = new ArrayList<MemorySegment>((int) (segmentCountEst / 2));
-
-		partition.segments(MEMORY_GRANULARITY, MEMORY_GRANULARITY, 8)
-			.forEachOrdered(segment -> {
-				if (rng.nextBoolean()) {
-					lhsSegments.add(segment);
-				} else {
-					rhsSegments.add(segment);
-				}
-			});
-
-		var lhsPartition = new MemoryPartition(lhsSegments.toArray(MemorySegment[]::new));
-		var rhsPartition = new MemoryPartition(rhsSegments.toArray(MemorySegment[]::new));
+		var lhsPartition = new MemoryPartition(partition.memory().ms().asSlice(0, totalSize / 2));
+		var rhsPartition = new MemoryPartition(partition.memory().ms().asSlice(totalSize / 2, totalSize / 2));
 
 		return Map.entry(lhsPartition, rhsPartition);
 	}
 
 	public void reverseMemorySplit(ReverseRandomGenerator rng, MemoryPartition lhs, MemoryPartition rhs) {
-		var union = lhs.union(rhs);
 
-		union.segments(MEMORY_GRANULARITY, MEMORY_GRANULARITY, 8)
-			.forEachOrdered(segment -> {
-				rng.pushBoolean(lhs.contains(segment.address(), segment.byteSize()));
-			});
 	}
 
 	public BasicBlock selectBlock(RandomGenerator rng, ResourcePartition partition) {
 		var entries = new ArrayList<Block.BlockEntry>();
-		int instructionCount = rng.nextInt(MAX_INSTRUCTIONS);
+		int instructionCount = rng.nextInt(config.maxInstructionCount());
 
 		for (int i = 0; i < instructionCount; i++) {
 			entries.add(selectBlockEntry(rng, partition));
@@ -381,17 +352,52 @@ public class ProgramRandomiser {
 
 	}
 
+	private static Opcode[] allOpcodes() {
+		if (allOpcodes == null) {
+			lock.lock();
+			try {
+				if (allOpcodes == null) {
+					allOpcodes = OpcodeCache.loadOpcodes();
+				}
+			} finally {
+				lock.unlock();
+			}
+		}
+
+		return allOpcodes;
+	}
+
+	private static Map<Opcode, Integer> opcodeIndices() {
+		if (opcodeIndices == null) {
+			lock.lock();
+			try {
+				if (opcodeIndices == null) {
+					var indices = new HashMap<Opcode, Integer>();
+					for (int i = 0; i < allOpcodes().length; i++) {
+						indices.put(allOpcodes()[i], i);
+					}
+
+					opcodeIndices = Collections.unmodifiableMap(indices);
+				}
+			} finally {
+				lock.unlock();
+			}
+		}
+		return opcodeIndices;
+	}
+
+
 	public static void main(String[] args) {
 		System.out.println("hello");
-		var r = new ProgramRandomiser();
 		var rp = ResourcePartition.all(true, Arena.ofAuto().allocate(4096));
+		var r = new ProgramRandomiser(Config.defaultConfig(), rp);
 
-		var tc = r.selectTestCase(new SplittableRandom(), rp);
+		var tc = r.selectTestCase(new SplittableRandom());
 		System.out.println(tc);
 
 		var rng = ReverseRandomGenerator.create();
-		r.reverseTestCase(rng, rp, tc);
-		var tc2 = r.selectTestCase(rng.flip(), rp);
+		r.reverseTestCase(rng, tc);
+		var tc2 = r.selectTestCase(rng.flip());
 		System.out.println(tc2);
 	}
 }

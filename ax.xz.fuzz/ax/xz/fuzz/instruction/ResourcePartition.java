@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.*;
 import java.util.random.RandomGenerator;
 
-public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet allowedRegisters, MemoryPartition memory) {
+public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet allowedRegisters, MemoryPartition memory, MemorySegment stack) {
 	public ResourcePartition {
 		if (statusFlags == null)
 			statusFlags = EnumSet.noneOf(StatusFlag.class);
@@ -18,11 +18,11 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 	}
 
 	public static ResourcePartition all(boolean evex) {
-		return new ResourcePartition(StatusFlag.all(), evex ? RegisterSet.ALL_EVEX : RegisterSet.ALL_VEX, MemoryPartition.addressSpace64());
+		return new ResourcePartition(StatusFlag.all(), evex ? RegisterSet.ALL_EVEX : RegisterSet.ALL_VEX, MemoryPartition.addressSpace64(), MemorySegment.NULL);
 	}
 
 	public static ResourcePartition all(boolean evex, MemorySegment ms) {
-		return new ResourcePartition(StatusFlag.all(), evex ? RegisterSet.ALL_EVEX : RegisterSet.ALL_VEX, MemoryPartition.of(ms));
+		return new ResourcePartition(StatusFlag.all(), evex ? RegisterSet.ALL_EVEX : RegisterSet.ALL_VEX, MemoryPartition.of(ms), MemorySegment.NULL);
 	}
 
 
@@ -54,17 +54,12 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 
 	public boolean canFulfil(int requiredSize, int alignment, int addressWidthBytes) {
 		// roudn size up to the nearest power of 2
+		if (requiredSize < 0)
+			return false;
+
 		requiredSize = Integer.highestOneBit(requiredSize - 1) << 1;
 		alignment = Integer.highestOneBit(alignment - 1) << 1;
 
 		return memory.canFulfil(requiredSize, alignment, addressWidthBytes);
-	}
-
-	public ResourcePartition withAllowedRegisters(RegisterSet allowedRegisters) {
-		return new ResourcePartition(statusFlags, allowedRegisters, memory);
-	}
-
-	public ResourcePartition withMemory(MemoryPartition memory) {
-		return new ResourcePartition(statusFlags, allowedRegisters, memory);
 	}
 }

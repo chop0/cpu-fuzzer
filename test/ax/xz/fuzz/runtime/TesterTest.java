@@ -9,7 +9,6 @@ import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.instruction.StatusFlag;
 import com.github.icedland.iced.x86.Instruction;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -30,21 +29,21 @@ class TesterTest {
 
 	@BeforeEach
 	void setUp() {
-		tester = Tester.create(RegisterSet.ALL_EVEX, StatusFlag.all());
-		var rand = new ProgramRandomiser();
+		tester = Tester.create(Config.defaultConfig(), RegisterSet.ALL_EVEX, StatusFlag.all());
+		var rand = new ProgramRandomiser(Config.defaultConfig(), tester.masterPartition);
 		var rng = new SplittableRandom();
-		rand.selectTestCase(rng, tester. masterPartition); // warm up
+		rand.selectTestCase(rng); // warm up
 	}
 
 	@Test
 	void profile() {
-		var rand = new ProgramRandomiser();
+		var rand = new ProgramRandomiser(Config.defaultConfig(), tester.masterPartition);
 		var rng = new SplittableRandom();
-		rand.selectTestCase(rng, tester. masterPartition);
+		rand.selectTestCase(rng);
 
 		var end = Instant.now().plus(Duration.ofSeconds(30));
 		while (Instant.now().isBefore(end)) {
-			rand.selectTestCase(rng, tester. masterPartition);
+			rand.selectTestCase(rng);
 		}
 	}
 

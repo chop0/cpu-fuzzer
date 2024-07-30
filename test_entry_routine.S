@@ -129,6 +129,14 @@
 
 avx512:
     func zmm, 0, 31, 64, offset
+    kxorq %k0, %k0, %k0
+	kxorq %k1, %k1, %k1
+	kxorq %k2, %k2, %k2
+	kxorq %k3, %k3, %k3
+	kxorq %k4, %k4, %k4
+	kxorq %k5, %k5, %k5
+	kxorq %k6, %k6, %k6
+	kxorq %k7, %k7, %k7
     jmp done
 
 avx:
@@ -205,6 +213,7 @@ test_case_entry:
     popfq
     movq 136(%r15), %rsp
     movq 128(%r15), %r15
+
 
     jmp *addr(%rip)
 test_case_exit:

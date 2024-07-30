@@ -6,14 +6,6 @@ import ax.xz.fuzz.parse.OperandLexer;
 import ax.xz.fuzz.parse.OperandParser;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.JsonDeserializer;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.deser.std.EnumSetDeserializer;
-import com.fasterxml.jackson.databind.jsontype.TypeDeserializer;
-import com.fasterxml.jackson.databind.ser.std.EnumSetSerializer;
-import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 import com.github.icedland.iced.x86.enc.Encoder;
@@ -46,7 +38,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 		var encoder = new Encoder(64, _ -> {
 		});
 
-		int[] explicitIndexMap = IntStream.range(0, operands.length).filter(n -> operands[n] instanceof Operand.Counted).toArray();
+		int[] explicitIndexMap = IntStream.range(0, operands.length).filter(n -> operands[n].counted()).toArray();
 		for (; ; ) {
 			try {
 				encoder.encode(insn, 0);
@@ -55,7 +47,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 				if (e.getMessage().contains("Expected OpKind")) { // todo: this is terribel
 					int opKind = Integer.parseInt(e.getMessage().split("Expected OpKind: ")[1].split(",")[0]);
 					int index = Integer.parseInt(e.getMessage().split("Operand ")[1].split(":")[0]);
-					operands[explicitIndexMap[index]] = new Operand.Counted.Imm(((Operand.Counted.Imm) operands[explicitIndexMap[index]]).bitSize(), opKind);
+					operands[explicitIndexMap[index]] = new Operand.Imm(((Operand.Imm) operands[explicitIndexMap[index]]).bitSize(), opKind);
 					insn.setOpKind(index, opKind);
 				} else {
 					break;
@@ -76,7 +68,8 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 			return null;
 
 		var operands = concat(Arrays.stream(parts).dropWhile(prefixes::contains).skip(1)
-						.map(part -> tryParseOperand(part, prefixes)).filter(Objects::nonNull),
+						.map(part -> tryParseOperand(part, prefixes)).filter(Objects::nonNull)
+				.flatMap(List::stream),
 				Arrays.stream(sops))
 				.toArray(Operand[]::new);
 
@@ -95,7 +88,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 		);
 	}
 
-	private static Operand tryParseOperand(String part, List<String> prefixes) {
+	private static List<Operand> tryParseOperand(String part, List<String> prefixes) {
 		var lexer = new OperandLexer(CharStreams.fromString(part));
 		lexer.removeErrorListeners();
 		var parser = new OperandParser(new CommonTokenStream(lexer));
@@ -109,7 +102,7 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 			return null;
 		}
 
-		return listener.getOperand();
+		return listener.getOperands();
 	}
 
 	public Instruction select(RandomGenerator rng, ResourcePartition resourcePartition) throws NoPossibilitiesException {
@@ -117,19 +110,12 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 
 		int explicitOpIdx = 0;
 		for (var operand : operands) {
-			switch (operand) {
-				case Operand.Counted counted -> {
-					counted.select(rng, insn, explicitOpIdx++, resourcePartition);
-					if (insn.getOpKind(explicitOpIdx - 1) == OpKind.REGISTER)
-						if (RegisterSet.EXTENDED_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
-							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.LEGACY_HIGH_GP));
-						else if (RegisterSet.LEGACY_HIGH_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
-							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.EXTENDED_GP));
-				}
-				case Operand.Uncounted uncounted -> uncounted.select(rng, insn, resourcePartition);
-				case Operand.SuppressedOperand _ -> {
-				}
+			int operandIndex = -1;
+			if (operand.counted()) {
+				operandIndex = explicitOpIdx++;
 			}
+
+			operand.select(rng, insn, operandIndex, resourcePartition);
 		}
 
 //		insn.setRepePrefix(rng.nextInt(30) == 0);
@@ -155,19 +141,11 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 	public void reverse(ReverseRandomGenerator rng, ResourcePartition resourcePartition, Instruction insn) throws NoPossibilitiesException {
 		int explicitOpIdx = 0;
 		for (var operand : operands) {
-			switch (operand) {
-				case Operand.Counted counted -> {
-					counted.reverse(rng, insn, explicitOpIdx++, resourcePartition);
-					if (insn.getOpKind(explicitOpIdx - 1) == OpKind.REGISTER)
-						if (RegisterSet.EXTENDED_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
-							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.LEGACY_HIGH_GP));
-						else if (RegisterSet.LEGACY_HIGH_GP.hasRegister(insn.getOpRegister(explicitOpIdx - 1)))
-							resourcePartition = resourcePartition.withAllowedRegisters(resourcePartition.allowedRegisters().subtract(RegisterSet.EXTENDED_GP));
-				}
-				case Operand.Uncounted uncounted -> uncounted.reverse(rng, insn, resourcePartition);
-				case Operand.SuppressedOperand _ -> {
-				}
+			int operandIndex = -1;
+			if (operand.counted()) {
+				operandIndex = explicitOpIdx++;
 			}
+			operand.reverse(rng, insn, operandIndex, resourcePartition);
 		}
 
 //		insn.setRepePrefix(rng.nextInt(30) == 0);
@@ -207,13 +185,12 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 
 		try {
 			for (var operand : operands) {
-				switch (operand) {
-					case Operand.Counted counted ->
-							counted.select(random, insn, explicitOpIdx++, rp);
-					case Operand.Uncounted uncounted -> uncounted.select(random, insn, rp);
-					case Operand.SuppressedOperand _ -> {
-					}
+				int operandIndex = -1;
+				if (operand.counted()) {
+					operandIndex = explicitOpIdx++;
 				}
+
+				operand.select(random, insn, operandIndex, rp);
 			}
 		} catch (NoPossibilitiesException e) {
 			throw new RuntimeException(e);

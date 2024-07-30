@@ -15,12 +15,14 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <setjmp.h>
+#include <immintrin.h>
+#include <stdatomic.h>
 
 
 #include <pthread.h>
 #include <threads.h>
 
-#define SIGSTKSZ 8192
+#define SIGNAL_STACK_SIZE (1048576)
 
 #define TRAMPOLINE_SIZE ((size_t)((void*)&routine_end - (void*)&routine_begin))
 #define TRAMPOLINE_START_OFFSET ((void *)&test_case_entry - (void*)&routine_begin)
@@ -41,154 +43,157 @@ thread_local int my_thread_idx = -1;
  void (*java_signal_handlers[NUM_IGNORED_SIGNALS])(int,  siginfo_t *, void *);
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// use rdfsbase to get fs base
-static void* asm_get_fs_base(void) {
-    void *fs_base;
-    asm volatile("rdfsbase %0" : "=r"(fs_base));
-    return fs_base;
-}
-
-static void* asm_get_gs_base(void) {
-    void *gs_base;
-    asm volatile("rdgsbase %0" : "=r"(gs_base));
-    return gs_base;
-}
-
-static void asm_set_gs_base(void *gs_base) {
-    asm volatile("wrgsbase %0" : : "r"(gs_base));
-}
 #define assert(x) if (!(x)) { fprintf(stderr, "%s:%d: Assertion failed: %s\n", __FILE__, __LINE__, #x); exit(EXIT_FAILURE); }
 
-void check_index(int index) {
-    assert (index == my_thread_idx);
-}
-
 typedef  struct {
-            void *fs_base;
-            void *gs_base;
-            void *trampoline_address;
-            void *sigstk_address;
-            void *jstack_address;
-            uint32_t pkru_restore;
+			void *fs_base;
+			void *gs_base;
+			void *trampoline_address;
+			void *sigstk_address;
 
-            bool taken;
-            bool active;
-            bool faulted;
-            struct fault_details fault_details;
-        } thread_info_t;
+			bool taken;
+			bool active;
+			bool faulted;
+			struct fault_details fault_details;
+			sigjmp_buf jmpbuf;
+		} thread_info_t;
 
-_Static_assert(sizeof(thread_info_t) ==64, "thread_info_t size mismatch");
-thread_info_t volatile active_thread_info [MAX_THREADS] = {0};
+thread_info_t active_thread_info [MAX_THREADS] = {0};
 
+void signal_handler(int signal, siginfo_t *si, void *ptr) {
+	void *rsp = NULL;
+	asm volatile("mov %%rsp, %0" : "=r"(rsp));
 
-void signal_handler(int signal, siginfo_t *si, void *ptr);
+	int offset = (void *)rsp - signal_stack_region;
+	uint64_t index = offset / SIGNAL_STACK_SIZE;
 
-void* ucontext_get_rsp(ucontext_t *ctx) {
-    return (void *)ctx->uc_mcontext.gregs[REG_RSP];
+	if ((index < MAX_THREADS) && active_thread_info[index].active) {
+		_writefsbase_u64((uint64_t) active_thread_info[index].fs_base);
+		_writegsbase_u64((uint64_t) active_thread_info[index].gs_base);
+
+		assert(index == my_thread_idx);
+		active_thread_info[index].faulted = true;
+		active_thread_info[index].fault_details = (struct fault_details) {
+			.fault_address = si->si_addr,
+			.fault_reason = si->si_signo,
+			.fault_code = si->si_code
+		};
+
+		siglongjmp(active_thread_info[index].jmpbuf, 1);
+	} else {
+		for (int i = 0; i < NUM_IGNORED_SIGNALS; i++) {
+			if (signal == ignored_signals[i]) {
+				java_signal_handlers[i](signal, si, ptr);
+				return;
+			}
+		}
+
+		fprintf(stderr, "Unexpected signal %s\n", strsignal(signal));
+		abort();
+	}
 }
 
 static void setup_signal_handlers(void) {
-    for (int i = 0; i < NUM_IGNORED_SIGNALS; i++) {
-        struct sigaction sa = {0};
+	for (int i = 0; i < NUM_IGNORED_SIGNALS; i++) {
+		struct sigaction sa = {0};
 
-        if (sigaction(ignored_signals[i], NULL, &sa) == -1) {
-                    perror("sigaction");
-                    exit(EXIT_FAILURE);
-        }
+		if (sigaction(ignored_signals[i], NULL, &sa) == -1) {
+					perror("sigaction");
+					exit(EXIT_FAILURE);
+		}
 
-        java_signal_handlers[i] = sa.sa_sigaction;
+		java_signal_handlers[i] = sa.sa_sigaction;
 
-        sa.sa_flags |= SA_SIGINFO | SA_NODEFER | SA_ONSTACK;
-        sa.sa_sigaction = signal_handler;
-        if (sigaction(ignored_signals[i], &sa, NULL) == -1) {
-            perror("sigaction");
-            exit(EXIT_FAILURE);
-        }
-    }
+		sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+		sa.sa_sigaction = signal_handler;
+		if (sigaction(ignored_signals[i], &sa, NULL) == -1) {
+			perror("sigaction");
+			exit(EXIT_FAILURE);
+		}
+	}
 }
 
 static void maybe_cpu_fuzzer_setup(void) {
-    static bool initialised = false;
-    if (initialised)
-        return;
+	static atomic_flag initialized = ATOMIC_FLAG_INIT;
+	if (atomic_flag_test_and_set(&initialized)) {
+		return;
+	}
 
-    initialised = true;
+	signal_stack_region = (void *) 0x8f0000000;
 
-    signal_stack_region = mmap(NULL, 2 * SIGSTKSZ * MAX_THREADS, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	for (size_t i = 0; i < MAX_THREADS; i++) {
+		void *address = mmap((uint8_t*)signal_stack_region + (size_t)(i * SIGNAL_STACK_SIZE), SIGNAL_STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+		if (address == MAP_FAILED) {
+			perror("mmap");
+			exit(EXIT_FAILURE);
+		}
 
-    for (int i = 0; i < MAX_THREADS; i++) {
-        active_thread_info[i].sigstk_address = signal_stack_region + 2 * i * SIGSTKSZ;
-    }
+		active_thread_info[i].sigstk_address = address;
+	}
 
-    setup_signal_handlers();
+	setup_signal_handlers();
 }
 
-thread_info_t* maybe_allocate_signal_stack(void) {
-    assert(asm_get_fs_base());
+void JVM_OnLoad(void) {
+	maybe_cpu_fuzzer_setup();
+}
 
-    thread_local static bool thread_init_completed = false;
-    if (thread_init_completed)
-        return NULL;
+thread_local static bool thread_init_completed = false;
+void* maybe_allocate_signal_stack(void) {
+	assert(__builtin_ia32_rdfsbase64());
 
-    pthread_mutex_lock(&mutex);
-    maybe_cpu_fuzzer_setup();
-    for (int i = 0; i < MAX_THREADS; i++) {
-        if (!active_thread_info[i].taken) {
-            active_thread_info[i].taken = true;
-            my_thread_idx = i;
-            break;
-        }
-    }
-    assert(my_thread_idx != -1);
-    pthread_mutex_unlock(&mutex);
+	if (thread_init_completed) {
+		return NULL;
+	 }
 
-    stack_t ss;
-    ss.ss_sp = active_thread_info[my_thread_idx].sigstk_address;
-    assert(ss.ss_sp);
-    ss.ss_size = SIGSTKSZ*2;
-    ss.ss_flags = 0;
-    if (sigaltstack(&ss, NULL) == -1) {
-        perror("sigaltstack");
-        exit(EXIT_FAILURE);
-    }
+	assert(pthread_mutex_lock(&mutex) == 0);
+	maybe_cpu_fuzzer_setup();
+	for (int i = 0; i < MAX_THREADS; i++) {
+		if (!active_thread_info[i].taken) {
+			active_thread_info[i].taken = true;
+			my_thread_idx = i;
+			break;
+		}
+	}
+	assert(my_thread_idx != -1);
+	pthread_mutex_unlock(&mutex);
+	printf("allocated %d\n", my_thread_idx);
 
-    thread_init_completed = true;
-    return &active_thread_info[my_thread_idx];
+	stack_t ss;
+	ss.ss_sp = active_thread_info[my_thread_idx].sigstk_address;
+	assert(ss.ss_sp);
+	ss.ss_size = SIGNAL_STACK_SIZE /2;
+	ss.ss_flags = 0;
+	if (sigaltstack(&ss, NULL) == -1) {
+		perror("sigaltstack");
+		exit(EXIT_FAILURE);
+	}
+
+	thread_init_completed = true;
+	return &active_thread_info[my_thread_idx];
 }
 
 void do_test( void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *output) {
-    static bool volatile global_initialized = false;
-    if (!global_initialized) {
-        puts("Initializing global state");
-        fflush(stdout);
-        pthread_mutex_lock(&mutex);
-        if (!global_initialized) {
-            maybe_cpu_fuzzer_setup();
-            global_initialized = true;
-        }
-        pthread_mutex_unlock(&mutex);
-    }
+	assert(thread_init_completed);
 
-    maybe_allocate_signal_stack();
+	active_thread_info[my_thread_idx].fs_base = (void *)__builtin_ia32_rdfsbase64();
+	active_thread_info[my_thread_idx].gs_base =(void *) __builtin_ia32_rdgsbase64();
+	active_thread_info[my_thread_idx].active = true;
+	active_thread_info[my_thread_idx].trampoline_address = trampoline + TRAMPOLINE_FINISH_OFFSET;
 
-    active_thread_info[my_thread_idx].fs_base = asm_get_fs_base();
-    active_thread_info[my_thread_idx].gs_base = asm_get_gs_base();
-    active_thread_info[my_thread_idx].active = true;
-    active_thread_info[my_thread_idx].trampoline_address = trampoline;
+	void (*trampoline_func)(void *, struct saved_state *) = (void *)trampoline + TRAMPOLINE_START_OFFSET;
 
-    void (*trampoline_func)(void *, struct saved_state *) = (void *)trampoline + TRAMPOLINE_START_OFFSET;
+	active_thread_info[my_thread_idx].faulted = false;
 
-    active_thread_info[my_thread_idx].faulted = false;
-    sigjmp_buf sigbuf;
-   if (sigsetjmp(&sigbuf, 1) == 0) {
-   	trampoline_func(code, &output->state);
-   	siglongjmp(&sigbuf, 1);
-    }
-    output->faulted = active_thread_info[my_thread_idx].faulted;
-    if (output->faulted) {
-        memcpy(&output->fault, &active_thread_info[my_thread_idx].fault_details, sizeof(output->fault));
-        output->faulted = true;
-    }
+   	if (sigsetjmp(active_thread_info[my_thread_idx].jmpbuf, 1) == 0) {
+   		trampoline_func(code, &output->state);
+   		siglongjmp(active_thread_info[my_thread_idx].jmpbuf, 1);
+	}
+	output->faulted = active_thread_info[my_thread_idx].faulted;
+	if (output->faulted) {
+		memcpy(&output->fault, &active_thread_info[my_thread_idx].fault_details, sizeof(output->fault));
+		output->faulted = true;
+	}
 
-    active_thread_info[my_thread_idx].active = false;
+	active_thread_info[my_thread_idx].active = false;
 }

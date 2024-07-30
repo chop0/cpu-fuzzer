@@ -46,6 +46,7 @@ public final class ExecutableSequence {
 	public static byte[] encode(CodeAssembler instructionAssembler, Instruction instruction) {
 		byte[] result = new byte[15];
 		var buf = ByteBuffer.wrap(result);
+		instructionAssembler.reset();
 		instructionAssembler.addInstruction(instruction);
 		instructionAssembler.assemble(buf::put, 0);
 		var trimmed = new byte[buf.position()];
@@ -85,7 +86,6 @@ public final class ExecutableSequence {
 
 				var insn = item.instruction();
 
-				instructionAssembler.reset();
 				var encoded = encode(instructionAssembler, insn);
 
 				for (var mutation : item.mutations()) {

@@ -30,7 +30,7 @@ public class PrefixAdder implements Mutator {
 	@Override
 	public boolean appliesTo(ResourcePartition rp, Opcode  opcode, Instruction instruction) {
 		for (Operand op : opcode.operands()) {
-			if (op instanceof Operand.Counted) {
+			if (op.counted()) {
 				return false;
 			}
 		}

@@ -1,12 +1,13 @@
 package ax.xz.fuzz.runtime;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeLabel;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static ax.xz.fuzz.runtime.ExecutableSequence.TEST_CASE_FINISH;
 import static ax.xz.fuzz.runtime.ExecutionResult.interestingMismatch;
@@ -56,7 +57,6 @@ public class Triage {
 
 			branches[i].type().perform.accept(assembler, blockHeaders[branches[i].takenIndex()]);
 			assembler.jmp(blockHeaders[branches[i].notTakenIndex()]);
-			System.out.println("Branches: " + branches[i].type() + " " + branches[i].takenIndex() + " " + branches[i].notTakenIndex());
 		}
 
 		assembler.label(exit);
@@ -67,65 +67,24 @@ public class Triage {
 		return seg.asSlice(0, buf.position());
 	}
 
-	public static void main(String[] args) throws JsonProcessingException {
-		var tester = new Tester(0);
+	public static void runFile(Path file) throws IOException {
+		var tc = RecordedTestCase.fromXML(Files.readString(file));
+
+		var tester = Tester.forRecordedCase(Config.defaultConfig(), tc);
+
 		var trampoline = tester.trampoline;
-		var scratch1 = tester.scratch1;
-		var scratch2 = tester.scratch2;
+		var branches = tc.branches();
 
-		var branches = new Branch[]{
-			new Branch(ExecutableSequence.BranchType.JO, 1, 1)
-		};
+		var b1 = block(trampoline, branches, tc.code1());
+		var b2 = block(trampoline, branches, tc.code2());
 
-		var b1 = block(trampoline, branches,
-			new byte[][]{new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0xfb, (byte) 0xcd, },
-				new byte[]{(byte) 0x67, (byte) 0x66, (byte) 0x0f, (byte) 0x57, (byte) 0x0c, (byte) 0x25, (byte) 0x20, (byte) 0x04, (byte) 0x21, (byte) 0x00, },
-				new byte[]{(byte) 0x66, (byte) 0x67, (byte) 0x0f, (byte) 0xbb, (byte) 0x14, (byte) 0x25, (byte) 0x00, (byte) 0x0b, (byte) 0x21, (byte) 0x00, },
-			});
+		var result1 = tester.runBlock(tc.initialState(), b1);
+		var result2 = tester.runBlock(tc.initialState(), b2);
 
-		var b2 = block(trampoline, branches,
-			new byte[][]{new byte[]{(byte) 0x66, (byte) 0x0f, (byte) 0xfb, (byte) 0xcd, },
-				new byte[]{(byte) 0x66, (byte) 0x67, (byte) 0x0f, (byte) 0xbb, (byte) 0x14, (byte) 0x25, (byte) 0x00, (byte) 0x0b, (byte) 0x21, (byte) 0x00, },
-				new byte[]{(byte) 0x67, (byte) 0x66, (byte) 0x0f, (byte) 0x57, (byte) 0x0c, (byte) 0x25, (byte) 0x20, (byte) 0x04, (byte) 0x21, (byte) 0x00, },
-			});
-
-		// print b1 and b2 in hex
-		for (var b : b1.toArray(JAVA_BYTE)) {
-			System.out.printf("%02x ", b & 0xff);
-		}
-		System.out.println();
-
-		for (var b : b2.toArray(JAVA_BYTE)) {
-			System.out.printf("%02x ", b & 0xff);
-		}
-		System.out.println();
-
-		var initialState = new ObjectMapper().readValue("""
-{"gprs":{"rax":7499826824358182689,"rbx":1116160,"rcx":2162688,"rdx":6855485519580547351,"rsi":-571229346786760823,"rdi":-4344841374730244575,"rbp":2165248,"r8":6229710751356351235,"r9":8984263798544311836,"r10":-6582228353864420016,"r11":1114368,"r12":1117696,"r13":2163712,"r14":2163200,"r15":2163712,"rsp":2166016},"zmm":{"zmm":["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==","AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==","AAIRAAAAAAApgK2euVy5+mQld+4ueR7bCEhibZKw37jNeBs39C5XvAAIEQAAAAAAAAERAAAAAABCyEJhIRqvwQ==","fjuRBh3rs0lsMSpMsI2uvgAJEQAAAAAAAAohAAAAAAAADREAAAAAAAAOIQAAAAAAm4bMaqJa4w/CBop+5W84/g==","AAcRAAAAAAAABSEAAAAAADoHtYA7tdzVAA8RAAAAAABiyP+jXPI5P6QkAhyJbIGTAAoRAAAAAAAJbMRk1fUSSw==","58EvjmV4FYuQYnyqs73YDvFhsLtgqzLFId+JArPiVyAACBEAAAAAAAALEQAAAAAAkBda0IZ8+2DRmVqwX1z8Iw==","AAghAAAAAAAAASEAAAAAAAAJEQAAAAAAXeuy0Y4uFjErbYI4vx3WvwAIEQAAAAAAAAYRAAAAAAAACREAAAAAAA==","K8Dm4jDaUZqzXMtRw2JHeQAAIQAAAAAAAAAhAAAAAAAACREAAAAAANGav0mgwJs6AAohAAAAAAC2rR/DdF2cHw==","V4u5/IoJdo4ADREAAAAAAG1wPAQEOP4YGjGDwupeeXFiFvLCKl14yni0fpi6elnjAAYRAAAAAABKH/uw5fuSQw==","+2ZmODISpQIACxEAAAAAAJTGQv/MfvRRKjIch89GiM8AACEAAAAAAAAOIQAAAAAAbm/WNjpE573YhXw9vUO8LA==","AAwRAAAAAAAPRKwwmz4qJY5nkuff7+QwoSOAXvToBIQABBEAAAAAAAALIQAAAAAAuUdEz/TF9ZIE6zDES2zt2w==","AAkhAAAAAAAADREAAAAAAAAIIQAAAAAA8kggFMSpO9EACxEAAAAAAAAIIQAAAAAAAAURAAAAAAAAASEAAAAAAA==","7Mrc/xU5H+pleJaHkWgX0AALEQAAAAAAAAAhAAAAAACOImk5vzwV37UQ8U2FsLrMAA4RAAAAAAAACBEAAAAAAA==","AA0RAAAAAAAACSEAAAAAAIOgOvz+EH11AA4RAAAAAAAYgiOiMnUtlMV46n/o+cn4AAQRAAAAAACU38V9HTSUQQ==","AAkRAAAAAAAAChEAAAAAAPereEVh7ob9AAwhAAAAAAAAAREAAAAAALuhAjWbEpvSAAoRAAAAAAAFcgFAFMMxuA==","CRmRzwm0HxMACCEAAAAAAGYLkiuo9jXSAAAhAAAAAADK/gKu9/7htAAEIQAAAAAAgoPhFVqLpur4HSxA9RMWGQ==","mhtayst/MolM+luuolPVIgANIQAAAAAAahLGKK8cPYKiDLyKRzMIYQAKIQAAAAAACDa82STsj3NWgFC0B+K0GA==","+t542lAPISjqeHAjz/112gAHEQAAAAAAJfQz728o8UAADyEAAAAAAHKLJq8PVpUiAA0hAAAAAAC3jHkF1WPvUA==","AAsRAAAAAAAABhEAAAAAAAANIQAAAAAAAAkRAAAAAAClmICxn+xqmwAEIQAAAAAAhFHztjikdn8ACSEAAAAAAA==","u5PdE9FQFxkABREAAAAAAAADIQAAAAAAWT5joophvr8ACiEAAAAAAIgGfxQG/ysVAAURAAAAAABuCq7uvE6/UA==","JW8MMYS0XkcyLwcXZWYWkioRy1WlD4kFoP+VhJwIOqEABSEAAAAAAIupHoLfBDpzAAoRAAAAAAAAAxEAAAAAAA==","zuYomwCke8kADyEAAAAAAPdDhyom0Bl1AAYhAAAAAADoDP103CM0zwANIQAAAAAAAAURAAAAAAAADyEAAAAAAA==","sCd9BAnvNMQdUIv7SxuRlgAEIQAAAAAAMvr7Btj+WgWd3mGTtUYd7QABIQAAAAAADuGtSshxecv+APpNlSi0vg==","qSl+H8gG7TA6SWT+tX7X25+6xfag/FeKexLg5dQcgLT98gj2WjY2AmrrZ5p3fKtcTIFy9i3dnC9Ua5lEWJ999w==","AA0RAAAAAACuOwW+4j2Sv88ANsHXzGygeyJ6GSsDhDoACSEAAAAAAAADEQAAAAAAgMEDCjUGKTNLFCyrLHGf6Q==","AAgRAAAAAAAADxEAAAAAAAAJEQAAAAAAmSzBMbCjieIAAyEAAAAAAAAHIQAAAAAAAAUhAAAAAADJf6vmwDzCnw==","AAMRAAAAAACl3FpxuDZLZgAFIQAAAAAAAAUhAAAAAAAAByEAAAAAAH5iMpOmhsXLAAIRAAAAAAAAAREAAAAAAA==","Ez0DlcC4fLwACREAAAAAAFN6R55PIRxrqu94FW97xMoAAiEAAAAAAKl8wrvMqACjAAwRAAAAAAAABxEAAAAAAA==","AAEhAAAAAAAAASEAAAAAAAAOIQAAAAAAAAgRAAAAAAAAASEAAAAAAGxFAaDqj1vdAA8RAAAAAABUI0R7SGPiBQ==","AAURAAAAAAAACSEAAAAAAAABEQAAAAAAAA4hAAAAAAAABiEAAAAAAAAEEQAAAAAAsqNpCmkQpWQADhEAAAAAAA==","AAcRAAAAAAAABSEAAAAAAAAFEQAAAAAAcr+5Jehsc8aO1JhkQJbXL0byJK7PRRPaAAgRAAAAAAAAChEAAAAAAA==","tTq00wVMuPPwKvAZY/l8IJqkPgr4UmjmAAgRAAAAAAAACBEAAAAAAKXIIJXNMdr5R0sA/GHfVNAAAyEAAAAAAA=="]},"mmx":{"mm":[-474407544239481056,5158151520311458522,1288719360744843475,1117696,300844207695738962,1115392,1115648,7107841410744608149]},"rflags":5618914537267122285}
-""", CPUState.class);
-
-		initialState = new CPUState(
-			initialState.gprs().withZeroed(0),
-			initialState.zmm().withZeroed(0, 32),
-			CPUState.MMXRegisters.filledWith(0L),
-			0
-		);
-//		System.out.println(initialState.zmm());
-
-//		for (int i = 0; i < 16; i += 8) {
-//			ByteBuffer.wrap(initialState.zmm().zmm()[19]).putLong(i, 0xdeadbeefdeadbeefL);
-//		}
-
-		scratch1.fill((byte) 0);
-		scratch2.fill((byte) 0);
-		var result1 = tester.runBlock(initialState, b1);
-		scratch1.fill((byte) 0);
-		scratch2.fill((byte) 0);
-		var result2 = tester.runBlock(initialState, b2);
-
-		if (interestingMismatch(result1, result2)) {
-			System.out.println(result1);
-			System.out.println(result2);
-		}
+		System.out.println(result1);
+		System.out.println(result2);
+		System.out.println(interestingMismatch(result1, result2));
+		if (!interestingMismatch(result1, result2))
+			System.exit(1);
 	}
 }

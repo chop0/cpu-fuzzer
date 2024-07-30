@@ -19,13 +19,14 @@ demo:
 
 	xor %eax, %eax
 
-	cpuid ; serialise
+	cpuid # serialise
 	jmp after_align
 
 .align 4096
 	after_align:
 
 	vmovlps mem_1(%rip), %xmm17, %xmm24
+	# mfence
 	vmovhps mem_2(%rip), %xmm0, %xmm8
 
 	vmovups %xmm24, (%rdi)
@@ -42,7 +43,7 @@ loop:
 	leaq 0(%rsp), %rdi
 	callq demo
 	callq demo
-	callq demo ; warm up so the jmp doesn't mispredict
+	callq demo # warm up to prevent mispredictions/DSB miss/other weirdness
 
 	vmovups input(%rip), %xmm17
 	vmovups mem_1(%rip), %xmm0

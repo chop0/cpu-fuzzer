@@ -7,18 +7,20 @@ import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.random.RandomGenerator;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static ax.xz.fuzz.blocks.randomisers.ProgramRandomiser.MEMORY_GRANULARITY;
 import static ax.xz.fuzz.runtime.MemoryUtils.*;
 import static java.lang.foreign.MemoryLayout.sequenceLayout;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static java.util.Objects.requireNonNull;
 
-public record MemoryPartition(long[] offsets, MemorySegment... ms) {
+public final record MemoryPartition(MemorySegment ms) {
 	private static final MemoryPartition ADDRESS_SPACE = new MemoryPartition(MemorySegment.ofAddress(0).reinterpret(Long.MAX_VALUE));
-	private static final MemoryPartition EMPTY = new MemoryPartition(new long[0]);
+	private static final MemoryPartition EMPTY = new MemoryPartition(MemorySegment.NULL);
 
 	public static MemoryPartition empty() {
 		return EMPTY;
@@ -28,16 +30,16 @@ public record MemoryPartition(long[] offsets, MemorySegment... ms) {
 		return ADDRESS_SPACE;
 	}
 
-	public MemoryPartition {
-		requireNonNull(ms);
-
-		Arrays.sort(ms, Comparator.comparingLong(MemorySegment::address));
-		ms = coalesce(ms);
-		offsets = sizeSum(ms);
+	public static MemoryPartition of(MemorySegment ms) {
+		return new MemoryPartition(ms);
 	}
 
-	public MemoryPartition(MemorySegment... ms) {
-		this(null, ms);
+	public MemoryPartition {
+		requireNonNull(ms);
+	}
+
+	public MemoryPartition() {
+		this(MemorySegment.NULL);	
 	}
 
 	public boolean isEmpty() {
@@ -66,7 +68,7 @@ public record MemoryPartition(long[] offsets, MemorySegment... ms) {
 		for (int i = 1; i < ms.length; i++) {
 			var next = ms[i];
 			if (current.address() + current.byteSize() == next.address()) {
-				current = current.reinterpret( current.byteSize() + next.byteSize());
+				current = current.reinterpret(current.byteSize() + next.byteSize());
 			} else {
 				result.add(current);
 				current = next;
@@ -78,11 +80,7 @@ public record MemoryPartition(long[] offsets, MemorySegment... ms) {
 	}
 
 	public long byteSize() {
-		long result = 0;
-		for (MemorySegment m : ms)
-			result += m.byteSize();
-
-		return result;
+		return ms.byteSize();
 	}
 
 	private static boolean fitsIn(long value, int widthBytes) {
@@ -90,77 +88,34 @@ public record MemoryPartition(long[] offsets, MemorySegment... ms) {
 	}
 
 	public boolean contains(long address, long size) {
-		var segment = findSubsegment(address);
-		if (segment == null)
-			return false;
-
-		return segment.byteSize() >= size;
-	}
-
-	private int findSubsegmentIndex(long address) {
-		int nearest = Arrays.binarySearch(ms, MemorySegment.ofAddress(address), Comparator.comparingLong(MemorySegment::address));
-		if (nearest >= 0)
-			return nearest;
-		else {
-			int segment = -(nearest + 1) - 1;
-			if (segment < 0 || segment >= ms.length)
-				return -1;
-
-			return segment;
-		}
-	}
-
-	private MemorySegment findSubsegment(long address) {
-		int index = findSubsegmentIndex(address);
-		if (index < 0)
-			return null;
-
-		if (address - ms[index].address() >= ms[index].byteSize())
-			return null;
-
-		return ms[index].asSlice(address - ms[index].address());
-	}
-
-	private MemorySegment findOffset(long offset) {
-		int nearest = Arrays.binarySearch(offsets, offset);
-		if (nearest >= 0)
-			return ms[nearest];
-		else {
-			int segment = -(nearest + 1) - 1;
-			if (segment < 0 || segment >= ms.length)
-				return null;
-
-			long segmentOffset = offset - offsets[segment];
-			return ms[segment].asSlice(segmentOffset);
-		}
+		return address >= ms.address() && address + size <= ms.address() + ms.byteSize();
 	}
 
 	public long selectSegment(RandomGenerator r, int size, int align, int addressWidthBytes) throws NoPossibilitiesException {
 		if (size == 0) size = 1;
-		long position = r.nextLong(byteSize() / size) * size;
-		var result = findOffset(position);
-		if (result == null)
-			throw new NoPossibilitiesException();
 
-		return result.address();
+		if (addressWidthBytes < 4 || size > MEMORY_GRANULARITY)
+			throw new IllegalArgumentException();
+
+
+		long index = r.nextLong(byteSize() / align) * align;
+		return ms.address() + index;
 	}
 
 	public void reverseSegment(ReverseRandomGenerator random, int requiredSize, int alignment, int addressWidthBytes, long outcome) throws NoPossibilitiesException {
-		long start = ms[0].address();
-		long end = unsignedMin(ms[ms.length - 1].address() + ms[ms.length - 1].byteSize(), (1L << (addressWidthBytes * 8)) - 1);
-		if (Long.compareUnsigned(start + requiredSize, end) > 0)
+		if (requiredSize == 0) requiredSize = 1;
+
+		if (addressWidthBytes < 4 || requiredSize > MEMORY_GRANULARITY)
+			throw new IllegalArgumentException();
+
+		if (!contains(outcome, requiredSize))
 			throw new NoPossibilitiesException();
 
-		int index = findSubsegmentIndex(outcome);
-		if (index < 0)
-			throw new NoPossibilitiesException();
-
-		long segmentOffset = outcome - ms[index].address();
-		long overallOffset = offsets[index] + segmentOffset;
-		random.pushLong(overallOffset);
+		long index = (outcome - ms.address()) / alignment;
+		random.pushLong(index);
 	}
 
-	public Stream<MemorySegment> segments(int size, int align, int addressWidth) {
+	public Stream<MemorySegment> segments(long size, long align, int addressWidth) {
 		var layout = sequenceLayout(size == 0 ? 1 : size, JAVA_BYTE).withByteAlignment(align == 0 ? 1 : align);
 
 		return Stream.of(ms)
@@ -172,26 +127,11 @@ public record MemoryPartition(long[] offsets, MemorySegment... ms) {
 	}
 
 	public boolean canFulfil(int size, int alignment, int addressWidth) {
-		return segments(size, alignment, addressWidth).findAny().isPresent();
+		if (addressWidth < 4)
+			throw new IllegalArgumentException();
+
+		if (size == 0) size = 1;
+		return size <= MEMORY_GRANULARITY;
 	}
 
-	public MemoryPartition union(MemoryPartition other) {
-		var result = new MemorySegment[ms.length + other.ms.length];
-		System.arraycopy(ms, 0, result, 0, ms.length);
-		System.arraycopy(other.ms, 0, result, ms.length, other.ms.length);
-
-		return new MemoryPartition(result);
-	}
-
-	public static MemoryPartition of(MemorySegment... ms) {
-		return new MemoryPartition(ms);
-	}
-
-	@Override
-	public boolean equals(Object obj) {
-		if (obj == this) return true;
-		if (obj == null || obj.getClass() != this.getClass()) return false;
-		var that = (MemoryPartition) obj;
-		return Arrays.equals(this.offsets, that.offsets) && Arrays.equals(this.ms, that.ms);
-	}
 }

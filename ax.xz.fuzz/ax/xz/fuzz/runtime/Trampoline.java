@@ -21,7 +21,11 @@ public record Trampoline(MemorySegment address) {
 	}
 
 	public static Trampoline create(Arena arena) {
-		var trampoline = mmap(arena, MemorySegment.NULL, alignUp(trampolineCode.byteSize(), 4096), READ, WRITE, EXECUTE);
+		return create(arena, 0);
+	}
+
+	public static Trampoline create(Arena arena, long address) {
+		var trampoline = mmap(arena, address == 0 ? MemorySegment.NULL : MemorySegment.ofAddress(address), alignUp(trampolineCode.byteSize(), 4096), READ, WRITE, EXECUTE);
 
 		trampoline.copyFrom(trampolineCode);
 

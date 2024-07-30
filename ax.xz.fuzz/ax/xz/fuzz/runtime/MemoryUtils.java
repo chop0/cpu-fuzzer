@@ -14,8 +14,13 @@ public class MemoryUtils {
 			protValue |= p.value;
 		}
 
+		int flags = MAP_PRIVATE() | MAP_ANONYMOUS();
+		if (address != MemorySegment.NULL) {
+			flags |= MAP_FIXED();
+		}
+
 		var result = slave_h.mmap(address, size, protValue,
-				MAP_PRIVATE() | MAP_ANONYMOUS(), -1, 0);
+				flags, -1, 0);
 
 		if (result.address() == MAP_FAILED().address()) {
 			throw new RuntimeException("mmap failed");

@@ -1,0 +1,11 @@
+<component name="libraryTable">
+  <library name="jackson-dataformat-xml-2.17.2">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/jackson-dataformat-xml-2.17.2.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.ideaLibSources/jackson-dataformat-xml-2.17.2-sources.jar!/" />
+    </SOURCES>
+  </library>
+</component>

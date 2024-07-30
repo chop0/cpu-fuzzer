@@ -18,7 +18,7 @@ import static java.util.stream.Collectors.*;
 import static java.util.stream.Stream.concat;
 
 public class InstructionReference {
-	private static final Map<String, Operand.SuppressedOperand[]> suppressedOperands;
+	private static final Map<String, Operand[]> suppressedOperands;
 
 	static {
 		var dbf = DocumentBuilderFactory.newDefaultInstance();
@@ -32,25 +32,25 @@ public class InstructionReference {
 		var statusFlags = mnemonicToOperands(doc, InstructionReference::statusFlags);
 		var registers = mnemonicToOperands(doc, InstructionReference::registers);
 
-		var s = new HashMap<String, Operand.SuppressedOperand[]>();
+		var s = new HashMap<String, Operand[]>();
 		var keys = new HashSet<>(statusFlags.keySet());
 		keys.addAll(registers.keySet());
 
 		for (var mnemonic : keys) {
-			Set<? extends Operand.SuppressedOperand> flags = statusFlags.getOrDefault(mnemonic, Set.of());
-			Set<? extends Operand.SuppressedOperand> regs = registers.getOrDefault(mnemonic, Set.of());
-			var all = concat(flags.stream(), regs.stream()).toArray(Operand.SuppressedOperand[]::new);
+			Set<? extends Operand> flags = statusFlags.getOrDefault(mnemonic, Set.of());
+			Set<? extends Operand> regs = registers.getOrDefault(mnemonic, Set.of());
+			var all = concat(flags.stream(), regs.stream()).toArray(Operand[]::new);
 			s.put(mnemonic, all);
 		}
 
-		s.put("ZEROUPPER", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.SuppressedOperand.Reg::new).toArray(Operand.SuppressedOperand[]::new));
-		s.put("ZEROALL", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.SuppressedOperand.Reg::new).toArray(Operand.SuppressedOperand[]::new));
+		s.put("ZEROUPPER", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
+		s.put("ZEROALL", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
 
 		suppressedOperands = Collections.unmodifiableMap(s);
 		System.out.println("Loaded " + suppressedOperands.size() + " suppressed operands");
 	}
 
-	private static <T extends Operand.SuppressedOperand> Map<String, Set<T>> mnemonicToOperands(Document doc, Function<Node, Set<T>> mapper) {
+	private static <T extends Operand> Map<String, Set<T>> mnemonicToOperands(Document doc, Function<Node, Set<T>> mapper) {
 		return stream(doc.getElementsByTagName("instruction"))
 				.unordered()
 				.collect(groupingByConcurrent(
@@ -82,7 +82,7 @@ public class InstructionReference {
 		};
 	}
 
-	public static Operand.SuppressedOperand[] suppressedOperands(Instruction instruction, String mnemonic) {
+	public static Operand[] suppressedOperands(Instruction instruction, String mnemonic) {
 		mnemonic = normaliseConditionalInstruction(instruction, mnemonic);
 		mnemonic = stripMnemonic(mnemonic);
 
@@ -101,7 +101,7 @@ public class InstructionReference {
 		return stripMnemonic(instruction.getAttributes().getNamedItem("asm").getNodeValue());
 	}
 
-	private static Set<Operand.SuppressedOperand.StatusFlags> statusFlags(Node instruction) {
+	private static Set<Operand.Flags> statusFlags(Node instruction) {
 		return stream(instruction.getChildNodes())
 				.filter(op -> op instanceof Element)
 				.filter(op -> op.getAttributes().getNamedItem("suppressed") != null)
@@ -112,21 +112,26 @@ public class InstructionReference {
 				.map(name -> name.split("_")[1])
 				.map(StatusFlag::valueOf)
 
-				.map(Operand.SuppressedOperand.StatusFlags::new)
+				.map(Operand.Flags::new)
 				.collect(toSet());
 	}
 
 
-	public static Set<Operand.SuppressedOperand.Reg> registers(Node instruction) {
+	public static Set<Operand.ImplicitReg> registers(Node instruction) {
 		return stream(instruction.getChildNodes())
 				.filter(op -> op instanceof Element)
 				.filter(op -> op.getAttributes().getNamedItem("suppressed") != null)
 				.map(Node::getTextContent)
 				.filter(c -> c != null && !c.isBlank())
 				.flatMap(n -> Arrays.stream(n.split(",")))
-				.map(Registers::byName)
-				.filter(Objects::nonNull)
-				.map(Operand.SuppressedOperand.Reg::new)
+				.map(n -> {
+					var id = Registers.byName(n);
+					if (id == null)
+						throw new NullPointerException(n + " not found");
+					return id;
+				})
+			.flatMapToInt(n -> Arrays.stream(RegisterSet.getAssociatedRegisters(n)))
+				.mapToObj(Operand.ImplicitReg::new)
 				.collect(toSet());
 	}
 

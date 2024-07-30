@@ -1,27 +1,29 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.blocks.*;
+import ax.xz.fuzz.blocks.Block;
+import ax.xz.fuzz.blocks.InterleavedBlock;
+import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.blocks.randomisers.ProgramRandomiser;
 import ax.xz.fuzz.instruction.MemoryPartition;
 import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.instruction.StatusFlag;
 import ax.xz.fuzz.tester.execution_result;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.github.icedland.iced.x86.asm.CodeAssembler;
 
+import java.io.PrintWriter;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.SplittableRandom;
+import java.util.*;
 import java.util.function.BiFunction;
 import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.runtime.ExecutionResult.interestingMismatch;
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
-import static ax.xz.fuzz.tester.slave_h.*;
+import static ax.xz.fuzz.tester.slave_h.do_test;
+import static ax.xz.fuzz.tester.slave_h.maybe_allocate_signal_stack;
 import static com.github.icedland.iced.x86.Register.*;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
@@ -34,37 +36,24 @@ public class Tester {
 
 	public final Trampoline trampoline;
 
-	public final MemorySegment scratch1;
-	final MemorySegment scratch2;
 	private final MemorySegment code;
 
-	private final ProgramRandomiser randomiser = new ProgramRandomiser();
-	 final ResourcePartition masterPartition;
+	private final ProgramRandomiser randomiser;
+	final ResourcePartition masterPartition;
 
 	private final RandomGenerator rng = new SplittableRandom();
 
-	public Tester(int index) {
-		var arena = Arena.ofAuto();
-		this.scratch1 = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x110000 + index * 4096L * 2), 4096, READ, WRITE);
-		this.scratch2 = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x210000 + index * 4096L * 2), 4096, READ, WRITE);
-		this.code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
-
-		this.trampoline = Trampoline.create(arena);
-
-		this.masterPartition = new ResourcePartition(StatusFlag.all(), RegisterSet.ALL_VEX.subtract(BANNED_REGISTERS), MemoryPartition.of(scratch1, scratch2));
-	}
-
-	public Tester(Trampoline trampoline, MemorySegment scratch1, MemorySegment scratch2, MemorySegment code, ResourcePartition masterPartition) {
+	public Tester(Config config, Trampoline trampoline, MemorySegment code, ResourcePartition masterPartition) {
 		this.trampoline = trampoline;
-		this.scratch1 = scratch1;
-		this.scratch2 = scratch2;
 		this.code = code;
 		this.masterPartition = masterPartition;
+		this.randomiser = new ProgramRandomiser(config, masterPartition);
 	}
 
-	public static Tester create(RegisterSet registers, EnumSet<StatusFlag> flags) {
+	public static Tester create(Config config, RegisterSet registers, EnumSet<StatusFlag> flags) {
 		class holder {
 			private static final VarHandle indexHandle;
+
 			static {
 				try {
 					indexHandle = MethodHandles.lookup().findStaticVarHandle(holder.class, "index", long.class);
@@ -74,6 +63,7 @@ public class Tester {
 			}
 
 			private static volatile long index = 0;
+
 			private static long nextIndex() {
 				return (long) indexHandle.getAndAdd(1);
 			}
@@ -81,22 +71,57 @@ public class Tester {
 
 		long index = holder.nextIndex();
 
-		var arena = Arena.ofAuto();
-		var scratch1 = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x110000 + index * 4096L * 2), 4096, READ, WRITE);
-		var scratch2 = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x210000 + index * 4096L * 2), 4096, READ, WRITE);
+		return withIndex(config, registers, flags, index);
+	}
+
+	public static Tester withIndex(Config config, RegisterSet registers, EnumSet<StatusFlag> flags, long index) {
+		var arena = Arena.global();
+		var scratch = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1100000 + index * 8192L * 2), 8192, READ, WRITE);
+
 		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
+		var stack = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x6a30000 + index * 4096L * 16 * 2), 4096, READ, WRITE, EXECUTE);
 
 		var trampoline = Trampoline.create(arena);
 
-		var masterPartition = new ResourcePartition(flags, registers.subtract(BANNED_REGISTERS), MemoryPartition.of(scratch1, scratch2));
-		return new Tester(trampoline, scratch1, scratch2, code, masterPartition);
+		var masterPartition = new ResourcePartition(flags, registers.subtract(BANNED_REGISTERS), MemoryPartition.of(scratch), stack);
+
+		maybe_allocate_signal_stack();
+		return new Tester(config, trampoline, code, masterPartition);
+	}
+
+	public static Tester forRecordedCase(Config config, RecordedTestCase rtc) {
+		var arena = Arena.global();
+		var scratch = MemoryUtils.mmap(arena, MemorySegment.ofAddress(rtc.scratchRegions()[0]), 8192, READ, WRITE);
+		long index = (rtc.scratchRegions()[0] - 0x1100000) / (8192 * 2);
+
+		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
+		var stack = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x6a30000 + index * 4096L * 16 * 2), 4096, READ, WRITE, EXECUTE);
+
+		var trampoline = Trampoline.create(arena, rtc.trampolineLocation());
+
+		maybe_allocate_signal_stack();
+		return new Tester(config, trampoline, code, new ResourcePartition(StatusFlag.all(), RegisterSet.ALL_EVEX, MemoryPartition.of(scratch), stack));
 	}
 
 	private static final Object printLock = new Object();
 
-	public ExecutionResult[] runTest() {
-		var tc = randomiser.selectTestCase(rng, masterPartition);
+	private static void printBytesGrouped(byte[] bytes, PrintWriter writer) {
+		for (int i = 0; i < bytes.length; i += 64) {
+			for (int j = 0; j < 64 && i + j < bytes.length; j++) {
+				writer.printf("%02x ", bytes[i + j] & 0xff);
+			}
+			writer.println();
+		}
+	}
+
+	public Map.Entry<ExecutionResult[], Optional<RecordedTestCase>> runTest(PrintWriter writeTestCases, boolean alwaysRecord) {
+		var tc = randomiser.selectTestCase(rng);
+		RecordedTestCase recorded = null; // only make this if we find a mismatch
+
 		var results = new ExecutionResult[tc.sequences().length];
+
+		if (writeTestCases != null)
+			writeTestCases.println("--- begin ---");
 
 		ExecutionResult previousResult = null;
 		ExecutableSequence previousBlock = null;
@@ -105,59 +130,76 @@ public class Tester {
 		ExecutableSequence[] sequences = tc.sequences();
 		for (int i = 0; i < sequences.length; i++) {
 			var test = sequences[i];
-			SequenceResult output = runSequence(tc.initialState(), test);
+
+			if (writeTestCases != null)
+				writeTestCases.println("--- next sequence ---");
+
+			SequenceResult output = runSequence(tc.initialState(), test, writeTestCases);
+
+			if (writeTestCases != null)
+				writeTestCases.println("--- ok sequence didnt die ---");
+
 
 			if (interestingMismatch(previousResult, output.result())) {
-				synchronized (printLock) {
-					System.err.println("Found inconsistent behaviour");
-					System.err.println(tc);
-					System.err.println("--- First result ----");
-					System.err.println(previousResult);
-					System.err.println("--- Second result ----");
-					System.err.println(output.result());
+				var minimised = minimise(tc);
+				recorded = record(minimised);
+			}
 
-					for (var b : previousCode) {
-						System.out.printf("%02x ", b & 0xff);
-					}
-					System.out.println();
-
-					for (var b : output.codeSlice().toArray(JAVA_BYTE)) {
-						System.out.printf("%02x ", b & 0xff);
-					}
-
-					System.out.println();
-
-					var minimised = minimise(tc);
-					System.err.println("Minimised:");
-					System.err.println(minimised);
-
-					var mapper = OpcodeCache.getMapper();
-					String value = null;
-					try {
-						value = mapper.writeValueAsString(minimised.initialState());
-					} catch (JsonProcessingException e) {
-						throw new RuntimeException(e);
-					}
-					System.err.println(value);
-				}
+			if (alwaysRecord) {
+				recorded = record(tc);
 			}
 
 			results[i] = previousResult = output.result();
-			previousBlock = test;
-			previousCode = output.codeSlice().toArray(JAVA_BYTE);
 		}
 
-		return results;
+		return Map.entry(results, Optional.ofNullable(recorded));
+	}
+
+	private RecordedTestCase record(InvarianceTestCase tc) {
+		var code1 = encodeRelevantInstructions(tc.sequences()[0]);
+		var code2 = encodeRelevantInstructions(tc.sequences()[1]);
+
+		return new RecordedTestCase(tc.initialState(), code1, code2, trampoline.address().address(), tc.branches(), new long[]{masterPartition.memory().ms().address(), masterPartition.stack().address()});
+	}
+
+	private byte[][][] encodeRelevantInstructions(ExecutableSequence seq) {
+		var asm = new CodeAssembler(64);
+		var result = new byte[seq.blocks().length][][];
+		Block[] blocks = seq.blocks();
+		for (int i = 0; i < blocks.length; i++) {
+			var block = blocks[i];
+			result[i] = new byte[block.size()][];
+			asm.reset();
+
+			int j = 0;
+			for (var item : block.items()) {
+				var bytes = ExecutableSequence.encode(asm, item.instruction());
+
+				for (var deferredMutation : item.mutations()) {
+					bytes = deferredMutation.perform(bytes);
+				}
+
+				result[i][j++] = bytes;
+			}
+		}
+
+		return result;
 	}
 
 	private SequenceResult runSequence(CPUState initialState, ExecutableSequence test) {
-		scratch1.fill((byte) 0);
-		scratch2.fill((byte) 0);
+		return runSequence(initialState, test, null);
+	}
+
+	private SequenceResult runSequence(CPUState initialState, ExecutableSequence test, PrintWriter writer) {
 
 		int codeLength = test.encode(code.address(), trampoline, code, R15, 100);
-		code.asSlice(codeLength).fill((byte) 0);
-
 		var codeSlice = code.asSlice(0, codeLength);
+
+		if (writer != null) {
+			printBytesGrouped(codeSlice.toArray(JAVA_BYTE), writer);
+			writer.flush();
+		}
+
 		var result = runBlock(initialState, codeSlice);
 		SequenceResult output = new SequenceResult(codeSlice, result);
 		return output;
@@ -175,7 +217,7 @@ public class Tester {
 		var branches = tc.branches();
 		var startState = tc.initialState();
 
-		for (;;) {
+		for (; ; ) {
 			boolean changed = false;
 
 			var simplifiedState = simplifyInitialState(startState, new ExecutableSequence(test1, branches), new ExecutableSequence(test2, branches));
@@ -190,7 +232,7 @@ public class Tester {
 					System.out.println("Skipping non-interleaved block");
 					continue;
 				}
-				
+
 				var redundantLeft = findRedundantInstructions(a.lhs().size(), startState, test1, test2, branches, block, InterleavedBlock::leftInterleavedIndex);
 
 				if (!redundantLeft.isEmpty()) {
@@ -218,7 +260,7 @@ public class Tester {
 				break;
 		}
 
-		var sequences = new ExecutableSequence[] { new ExecutableSequence(test1, branches), new ExecutableSequence(test2, branches) };
+		var sequences = new ExecutableSequence[]{new ExecutableSequence(test1, branches), new ExecutableSequence(test2, branches)};
 		return new InvarianceTestCase(tc.pairs(), tc.branches(), sequences, startState);
 	}
 
@@ -245,8 +287,8 @@ public class Tester {
 			test1Changed[blockToReduce] = aWithout;
 			test2Changed[blockToReduce] = bWithout;
 
-			var test1Result = runSequence(startState, new ExecutableSequence(test1Changed, branches));
-			var test2Result = runSequence(startState, new ExecutableSequence(test2Changed, branches));
+			var test1Result = runSequence(startState, new ExecutableSequence(test1Changed, branches), null);
+			var test2Result = runSequence(startState, new ExecutableSequence(test2Changed, branches), null);
 
 			if (interestingMismatch(test1Result.result, test2Result.result)) {
 				redundantIndices.add(i);
@@ -259,28 +301,26 @@ public class Tester {
 	private CPUState simplifyInitialState(CPUState state, ExecutableSequence... sequences) {
 		for (int i = 0; i < 32; i++) {
 			var zmm = state.zmm().withZeroed(i);
+			if (zmm.equals(state.zmm()))
+				continue;
+
 			var newState = new CPUState(state.gprs(), zmm, state.mmx(), state.rflags());
 
-			boolean consistent = true;
 			ExecutionResult previous = null;
 			for (var sequence : sequences) {
 				var result = runSequence(newState, sequence).result;
 				if (interestingMismatch(previous, result)) {
-					consistent = false;
-					break;
+					return newState;
 				}
 				previous = result;
-			}
-
-			if (!consistent) {
-				return newState;
-			} else {
-				state = newState;
 			}
 		}
 
 		for (int i = 0; i < 8; i++) {
 			var mmx = state.mmx().withZeroed(i);
+			if (mmx.equals(state.mmx()))
+				continue;
+
 			var newState = new CPUState(state.gprs(), state.zmm(), mmx, state.rflags());
 
 			boolean consistent = true;
@@ -296,13 +336,13 @@ public class Tester {
 
 			if (!consistent) {
 				return newState;
-			} else {
-				state = newState;
 			}
 		}
 
 		for (int i = 0; i < 16; i++) {
 			var gprs = state.gprs().withZeroed(i);
+			if (gprs.equals(state.gprs()))
+				continue;
 			var newState = new CPUState(gprs, state.zmm(), state.mmx(), state.rflags());
 
 			boolean consistent = true;
@@ -318,8 +358,6 @@ public class Tester {
 
 			if (!consistent) {
 				return newState;
-			} else {
-				state = newState;
 			}
 		}
 
@@ -343,6 +381,9 @@ public class Tester {
 	}
 
 	public ExecutionResult runBlock(CPUState startState, MemorySegment code) {
+		masterPartition.memory().ms().fill((byte) 0);
+		masterPartition.stack().fill((byte) 0);
+
 		try (var arena = Arena.ofConfined()) {
 			var output = execution_result.allocate(arena);
 			startState.toSavedState(execution_result.state(output));

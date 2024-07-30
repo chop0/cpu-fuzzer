@@ -1,7 +1,13 @@
 .PHONY: all clean
 
-all: repro
-	./repro
+all: repro2
+	./repro2
+
+repro2: repro2.o lib.o
+	gcc -march=native -pthread -g -o $@ $^ -nostartfiles
+
+repro2.o: repro2.S
+	gcc -DDEBUG -c repro2.S -o $@
 
 repro: repro.o lib.o
 	gcc -march=native -pthread -g -o $@ $^ -nostartfiles

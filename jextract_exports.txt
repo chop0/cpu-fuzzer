@@ -33,3 +33,4 @@
 --include-typedef __sigset_t
 --include-function routine_begin
 --include-function routine_end
+--include-function maybe_allocate_signal_stack

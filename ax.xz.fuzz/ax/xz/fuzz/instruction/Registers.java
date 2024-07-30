@@ -15,7 +15,25 @@ import static com.github.icedland.iced.x86.Register.*;
 
 public class Registers {
 
-	public static int MXCSR = 256, GDTR = 257, LDTR = 258, IDTR = 259, TR = 260, MSRS = 261;
+	public static int MXCSR = 256;
+	public static int GDTR = 257;
+	public static int LDTR = 258;
+	public static int IDTR = 259;
+	public static int TR = 260;
+	public static int MSRS = 261;
+	public static int TSC = 262;
+	public static int SSP = 263;
+	public static int TSCAUX = 264;
+	public static int X87CONTROL = 265;
+	public static int X87STATUS = 266;
+	public static int X87TAG = 267;
+	public static int X87PUSH = 268;
+	public static int X87POP = 269;
+	public static int X87POP2 = 270;
+	public static int UIF = 271;
+	public static int XCR0 = 272;
+	public static int ST0 = 273;
+	public static int ST1 = 274;
 
 	private static final Map<String, Integer> registers;
 	private static final String[] registerNames;
@@ -41,6 +59,20 @@ public class Registers {
 		r.put("FSBASE", FS);
 		r.put("GSBASE", GS);
 		r.put("IP", EIP); // TODO: wrong
+		r.put("TSC", TSC);
+		r.put("SSP", SSP);
+		r.put("TSCAUX", TSCAUX);
+		r.put("X87CONTROL", X87CONTROL);
+		r.put("X87STATUS", X87STATUS);
+		r.put("X87TAG", X87TAG);
+		r.put("X87PUSH", X87PUSH);
+		r.put("X87POP", X87POP);
+		r.put("X87POP2", X87POP2);
+		r.put("UIF", UIF);
+		r.put("XCR0", XCR0);
+		r.put("ST(0)", ST0);
+		r.put("ST(1)", ST1);
+
 
 		registers = Collections.unmodifiableMap(r);
 		registerNames = new String[registers.size()];

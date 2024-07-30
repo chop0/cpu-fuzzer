@@ -1,6 +1,9 @@
 package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.tester.saved_state;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.util.StdConverter;
 
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
@@ -75,6 +78,10 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 								   long r9, long r10, long r11, long r12, long r13, long r14, long r15, long rsp) {
 		private static final RecordComponent[] components = GeneralPurposeRegisters.class.getRecordComponents();
 		private static final Constructor<GeneralPurposeRegisters> constructor = (Constructor)GeneralPurposeRegisters.class.getConstructors()[0];
+
+		public GeneralPurposeRegisters withRsp(long newRsp) {
+			return new GeneralPurposeRegisters(rax, rbx, rcx, rdx, rsi, rdi, rbp, r8, r9, r10, r11, r12, r13, r14, r15, newRsp);
+		}
 
 		public GeneralPurposeRegisters withZeroed(int idx) {
 			var parameters = new Long[components.length];
@@ -174,7 +181,48 @@ public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXReg
 		}
 	}
 
-	public record VectorRegisters(byte[][] zmm) {
+	private static class ZmmString extends StdConverter<String, byte[]> {
+		@Override
+		public byte[] convert(String value) {
+			var bytes = new byte[64];
+			for (int i = 0; i < 64; i += 2) {
+				if (i+1 >= value.length()) {
+					break;
+				}
+				bytes[i] = (byte) Integer.parseInt(value.substring(i, i + 2), 16);
+			}
+			return bytes;
+		}
+	}
+
+	private static class StringZmm extends StdConverter<byte[], String> {
+		@Override
+		public String convert(byte[] value) {
+			var builder = new StringBuilder();
+			for (byte b : value) {
+				builder.append(String.format("%02x", b));
+			}
+			return builder.toString();
+		}
+	}
+
+	public record VectorRegisters(
+		@JsonSerialize(contentConverter = StringZmm.class)
+			@JsonDeserialize(contentConverter = ZmmString.class)
+		byte[][] zmm) {
+		public VectorRegisters {
+			if (zmm == null) {
+				zmm = new byte[32][64];
+			} else if (zmm.length < 32) {
+				var newZmm = new byte[32][64];
+				System.arraycopy(zmm, 0, newZmm, 0, zmm.length);
+				for (int i = zmm.length; i < 32; i++) {
+					newZmm[i] = new byte[64];
+				}
+				zmm = newZmm;
+			}
+		}
+
 		public VectorRegisters withZeroed(int index) {
 			var newZmm = Arrays.copyOf(zmm, zmm.length);
 			newZmm[index] = new byte[64];

@@ -15,7 +15,7 @@ public class VexAdder implements Mutator {
 	@Override
 	public boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction) {
 		for (Operand op : code.operands()) {
-			if (op instanceof Operand.Counted) {
+			if (op.counted()) {
 				return false;
 			}
 		}
