@@ -42,6 +42,11 @@ public record RecordedTestCase(
 		}
 	}
 
+	public long encodedSize() {
+		return Arrays.stream(code1).flatMap(Arrays::stream).mapToInt(b -> b.length).sum() +
+		       Arrays.stream(code2).flatMap(b -> Arrays.stream(b)).mapToInt(b -> b.length).sum();
+	}
+
 	public String toXML() {
 		var mapper = new XmlMapper();
 		mapper.enable(SerializationFeature.INDENT_OUTPUT);
@@ -141,7 +146,7 @@ public record RecordedTestCase(
 		}
 	}
 
-	private static String disassemble(byte[] code) {
+	public static String disassemble(byte[] code) {
 		var sb = new StringBuilder();
 		new GasFormatter().format(new Decoder(64, code).decode(), new StringOutput(sb));
 		return sb.toString();
@@ -149,7 +154,7 @@ public record RecordedTestCase(
 
 	public static void main(String[] args) {
 		var tester = Tester.create(Config.defaultConfig(), RegisterSet.ALL_EVEX, StatusFlag.all());
-		var result = tester.runTest(null, true).getValue().orElseThrow();
+		var result = tester.runTest(true).getValue().orElseThrow();
 		var xml = result.toXML();
 		var result2 = RecordedTestCase.fromXML(xml);
 

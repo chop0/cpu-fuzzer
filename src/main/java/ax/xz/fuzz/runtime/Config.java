@@ -1,75 +1,92 @@
 package ax.xz.fuzz.runtime;
 
+import picocli.CommandLine;
+
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ForkJoinPool;
 
-public record Config(int threadCount, int blockCount, int maxInstructionCount, Path file) {
-	private static final Map<String, String> shorthands = Map.of(
-		"h", "help",
-		"j", "threads",
-		"b", "block-count",
-		"i", "block-size",
-		"f", "file"
-	);
-	private static final Set<String> validKeys = Set.of("help", "threads", "block-count", "block-size", "file");
+import static picocli.CommandLine.Help.Visibility.ALWAYS;
+import static picocli.CommandLine.Model.*;
+import static picocli.CommandLine.*;
+
+public final class Config {
+	@Option(showDefaultValue = ALWAYS, names = {"-j", "--threads"}, defaultValue = "${ForkJoinPool.getCommonPoolParallelism()}", description = "Number of threads to use")
+	public   int threadCount;
+	@Option(showDefaultValue = ALWAYS, names = {"-c", "--block-count"}, defaultValue = "${defaultConfig().blockCount()}", description = "Number of interleaved blocks each test case should contain.  Each interleaved block is a combination of two basic blocks.")
+	public   int blockCount;
+	@Option(showDefaultValue = ALWAYS, names = {"-i", "--block-size"}, defaultValue = "${defaultConfig().maxInstructionCount()}", description = "Maximum number of instructions in each basic block")
+	public   int maxInstructionCount;
+	@Option(showDefaultValue = ALWAYS, names = {"-b", "--branch-limit"}, defaultValue = "${defaultConfig().branchLimit()}", description = "The number of branches a test case can take before it is forcibly terminated")
+	public   int branchLimit;
+	@Parameters(arity = "0..*", description = "Path to the file to replay", mapFallbackValue = Option.NULL_VALUE)
+	public   Optional<Path> file;
+
+	public Config(int threadCount, int blockCount, int maxInstructionCount, int branchLimit, Optional<Path> file) {
+		this.threadCount = threadCount;
+		this.blockCount = blockCount;
+		this.maxInstructionCount = maxInstructionCount;
+		this.branchLimit = branchLimit;
+		this.file = file;
+	}
+
+	public Config() {
+		this.threadCount = ForkJoinPool.getCommonPoolParallelism();
+		this.blockCount = 2;
+		this.maxInstructionCount = 10;
+		this.branchLimit = 100;
+		this.file = Optional.empty();
+	}
 
 	public static Config defaultConfig() {
-		return new Config(ForkJoinPool.getCommonPoolParallelism(), 2, 10, null);
+		return new Config(ForkJoinPool.getCommonPoolParallelism(), 2, 10, 100, Optional.empty());
 	}
 
-	public static Config fromArgs(String[] args) {
-		var cmdlineArgs = parseArgs(args);
-		if (cmdlineArgs.containsKey("help") || cmdlineArgs.keySet().stream().anyMatch(n -> !validKeys.contains(n))) {
-			printHelp();
-		}
-
-		int threads = Integer.parseInt(cmdlineEnvDefault(cmdlineArgs, "threads", "THREAD_COUNT", String.valueOf(ForkJoinPool.getCommonPoolParallelism())));
-		int blockCount = Integer.parseInt(cmdlineEnvDefault(cmdlineArgs, "block-count", "NUM_BLOCKS", "2"));
-		int maxInstructionCount = Integer.parseInt(cmdlineEnvDefault(cmdlineArgs, "block-size", "MAX_INSTRUCTIONS", "10"));
-		var loc = cmdlineEnvDefault(cmdlineArgs, "file", "FILE", null);
-		Path file = loc != null ? Path.of(loc) : null;
-		return new Config(threads, blockCount, maxInstructionCount, file);
+	public int threadCount() {
+		return threadCount;
 	}
 
-	private static void printHelp() {
-		System.err.println("""
-			Usage: fuzz [options]
-			Options:
-			 	--help | -h
-			 	--file <path> | -f <path> | FILE=<path>
-			 	--threads <count> | -j <count> | THREAD_COUNT=<count>
-			 	--block-count <count> | -b <count> | NUM_BLOCKS=<count>
-			 	--block-size <count> | -i <count> | MAX_INSTRUCTIONS=<count>""");
-		System.exit(1);
+	public int blockCount() {
+		return blockCount;
 	}
 
-	private static String cmdlineEnvDefault(Map<String, String> args, String key, String env, String def) {
-		return Optional.ofNullable(args.get(key)).or(() -> Optional.ofNullable(System.getenv(env))).orElse(def);
+	public int maxInstructionCount() {
+		return maxInstructionCount;
 	}
 
-	private static Map<String, String> parseArgs(String[] args) {
-		var map = new HashMap<String, String>();
-		for (int i = 0; i < args.length; i++) {
-			var key =  args[i];
-			if (key.startsWith("--")) {
-				String value = "";
-				if (key.contains("="))
-					value = key.substring(key.indexOf('=') + 1);
-				else if (i + 1 < args.length)
-					value = args[++i];
-				map.put(key.substring(2), value);
-			} else if (key.startsWith("-")) {
-				String value = i + 1 < args.length ? args[++i] : "";
-				map.put(shorthands.get(key.substring(1)), value);
-			} else {
-				throw new IllegalArgumentException("Invalid argument: " + args[i]);
-			}
-		}
-
-		return map;
+	public int branchLimit() {
+		return branchLimit;
 	}
+
+	public Optional<Path> file() {
+		return file;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (obj == this) return true;
+		if (obj == null || obj.getClass() != this.getClass()) return false;
+		var that = (Config) obj;
+		return this.threadCount == that.threadCount &&
+		       this.blockCount == that.blockCount &&
+		       this.maxInstructionCount == that.maxInstructionCount &&
+		       this.branchLimit == that.branchLimit &&
+		       Objects.equals(this.file, that.file);
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(threadCount, blockCount, maxInstructionCount, branchLimit, file);
+	}
+
+	@Override
+	public String toString() {
+		return "Config[" +
+		       "threadCount=" + threadCount + ", " +
+		       "blockCount=" + blockCount + ", " +
+		       "maxInstructionCount=" + maxInstructionCount + ", " +
+		       "branchLimit=" + branchLimit + ", " +
+		       "file=" + file + ']';
+	}
+
 }

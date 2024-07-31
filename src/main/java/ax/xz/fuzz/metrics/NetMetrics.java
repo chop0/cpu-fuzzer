@@ -1,4 +1,4 @@
-package ax.xz.fuzz.runtime;
+package ax.xz.fuzz.metrics;
 
 import com.sun.net.httpserver.HttpServer;
 
@@ -7,17 +7,17 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 
-public class Metrics implements AutoCloseable {
+public class NetMetrics implements AutoCloseable, ThreadMetrics {
 	private static final VarHandle BRANCHES, FAULTED_SAMPLES, OPCODE_COUNT, SAMPLES, SUCCEEDED_SAMPLES;
 
 	static {
 		try {
 			var lookup = MethodHandles.lookup();
-			BRANCHES = lookup.findVarHandle(Metrics.class, "branches", long.class);
-			FAULTED_SAMPLES = lookup.findVarHandle(Metrics.class, "faultedSamples", long.class);
-			OPCODE_COUNT = lookup.findVarHandle(Metrics.class, "opcodeCount", long.class);
-			SAMPLES = lookup.findVarHandle(Metrics.class, "samples", long.class);
-			SUCCEEDED_SAMPLES = lookup.findVarHandle(Metrics.class, "succeededSamples", long.class);
+			BRANCHES = lookup.findVarHandle(NetMetrics.class, "branches", long.class);
+			FAULTED_SAMPLES = lookup.findVarHandle(NetMetrics.class, "faultedSamples", long.class);
+			OPCODE_COUNT = lookup.findVarHandle(NetMetrics.class, "opcodeCount", long.class);
+			SAMPLES = lookup.findVarHandle(NetMetrics.class, "samples", long.class);
+			SUCCEEDED_SAMPLES = lookup.findVarHandle(NetMetrics.class, "succeededSamples", long.class);
 		} catch (NoSuchFieldException | IllegalAccessException e) {
 			throw new AssertionError(e);
 		}
@@ -27,7 +27,7 @@ public class Metrics implements AutoCloseable {
 
 	private volatile long opcodeCount, faultedSamples, succeededSamples, samples, branches;
 
-	public Metrics() throws IOException {
+	public NetMetrics() throws IOException {
 		HttpServer server1;
 		try {
 			server1 = HttpServer.create(new InetSocketAddress(9100), 10);
@@ -38,7 +38,7 @@ public class Metrics implements AutoCloseable {
 		this.server = server1;
 	}
 
-	public Metrics startServer() {
+	public ThreadMetrics startServer() {
 		if (server != null) {
 			server.createContext("/", ex -> {
 				var response = getMetrics();

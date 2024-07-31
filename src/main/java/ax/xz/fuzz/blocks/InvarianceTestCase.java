@@ -3,6 +3,7 @@ package ax.xz.fuzz.blocks;
 import ax.xz.fuzz.runtime.Branch;
 import ax.xz.fuzz.runtime.CPUState;
 import ax.xz.fuzz.runtime.ExecutableSequence;
+import ax.xz.fuzz.runtime.RecordedTestCase;
 
 import java.util.Arrays;
 import java.util.Objects;

@@ -1,13 +1,13 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Master" type="Application" factoryName="Application" nameIsGenerated="true">
-    <option name="MAIN_CLASS_NAME" value="ax.xz.fuzz.runtime.Master" />
-    <module name="ax.xz.fuzz" />
+    <option name="MAIN_CLASS_NAME" value="ax.xz.fuzz.Master" />
+    <module name="cpu-fuzzer.main" />
     <projectPathOnTarget name="projectPathOnTarget" value="/home/apetri/cpu-fuzzer" />
     <target name="apetri@unicorn:22" />
     <option name="VM_PARAMETERS" value="-Djava.library.path=/home/apetri/cpu-fuzzer/" />
     <extension name="coverage">
       <pattern>
-        <option name="PATTERN" value="ax.xz.fuzz.runtime.*" />
+        <option name="PATTERN" value="ax.xz.fuzz.*" />
         <option name="ENABLED" value="true" />
       </pattern>
     </extension>
