@@ -2,18 +2,18 @@ package ax.xz.fuzz;
 
 import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.StatusFlag;
-import ax.xz.fuzz.metrics.FuzzThreadEvent;
+import ax.xz.fuzz.runtime.Architecture;
 import ax.xz.fuzz.runtime.Config;
 import ax.xz.fuzz.runtime.Tester;
 import ax.xz.fuzz.runtime.Triage;
 import picocli.CommandLine;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.StructuredTaskScope;
+import java.util.zip.DataFormatException;
 
 public class Master {
 	private static final Object printLock = new Object();
@@ -37,7 +37,7 @@ public class Master {
 				}
 			} catch (InterruptedException e) {
 				return 0;
-			} catch (IOException e) {
+			} catch (IOException | DataFormatException e) {
 				throw new CommandLine.ExecutionException(config, e.getMessage(), e);
 			}
 		});
@@ -59,43 +59,32 @@ public class Master {
 	}
 
 	private static int lookForBug(int i, Config config) throws InterruptedException {
-		Tester tester = createTester(config);
+		Tester t = Tester.create(config);
 
 		while (!Thread.interrupted()) {
-			var results = tester.runTest(false);
+			var results = t.runTest();
 
-			if (results.getValue().isPresent()) {
-				var xml = results.getValue().orElseThrow().toXML();
+			if (results.hasInterestingMismatch()) {
+				var xml = t.record(results.tc()).toXML();
 				var outputFile = new File("thread-%d-%d.xml".formatted(i, System.currentTimeMillis()));
 				try (var writer = new FileWriter(outputFile)) {
 					writer.write(xml);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
+
+				var minimal = t.minimise(results.tc());
+				var minimalXml = t.record(minimal).toXML();
+				var minimalOutputFile = new File("thread-%d-%d-minimal.xml".formatted(i, System.currentTimeMillis()));
+				try (var writer = new FileWriter(minimalOutputFile)) {
+					writer.write(minimalXml);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+
 			}
 		}
 
 		throw new InterruptedException();
-	}
-
-	private static Tester createTester(Config config) {
-		Tester tester;
-
-		var fuzzEvent = new FuzzThreadEvent();
-
-		if (fuzzEvent.isEnabled())
-			fuzzEvent.begin();
-
-		tester = Tester.create(config, RegisterSet.ALL_EVEX, StatusFlag.all());
-		if (fuzzEvent.isEnabled() && fuzzEvent.shouldCommit()) {
-			fuzzEvent.end();
-			fuzzEvent.thread = Thread.currentThread();
-			fuzzEvent.maxInstructionCount = config.maxInstructionCount();
-			fuzzEvent.branchLimit = config.branchLimit();
-			fuzzEvent.trampolineLocation = tester.trampoline.address().address();
-			fuzzEvent.blocksPerTestCase = config.blockCount();
-			fuzzEvent.commit();
-		}
-		return tester;
 	}
 }

@@ -1,48 +1,37 @@
 package ax.xz.fuzz.blocks;
 
 import ax.xz.fuzz.instruction.Opcode;
-import ax.xz.fuzz.instruction.ResourcePartition;
-import ax.xz.fuzz.mutate.DeferredMutation;
-import ax.xz.fuzz.runtime.Trampoline;
 import com.github.icedland.iced.x86.Instruction;
-import com.github.icedland.iced.x86.enc.Encoder;
-import com.github.icedland.iced.x86.enc.EncoderException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.*;
-import java.util.random.RandomGenerator;
+import java.util.Arrays;
+import java.util.SequencedCollection;
 
-import static ax.xz.fuzz.runtime.ExecutableSequence.TEST_CASE_FINISH;
+import static ax.xz.fuzz.tester.slave_h.trampoline_return_address;
 
 public interface Block {
-	default int[] encode(Trampoline trampoline, MemorySegment code) throws UnencodeableException {
+	default int[] encode(MemorySegment code) throws UnencodeableException {
 		var codeBuf = code.asByteBuffer();
-		var encoder = new Encoder(64, codeBuf::put);
 
 		int[] locations = new int[size() * 15];
 
 		int position = 0;
 		int rip = 0;
 		for (var item : items()) {
-			try {
-				var insn = item.instruction();
-				int insnLen = encoder.encode(insn, code.address() + codeBuf.position());
-				for (int k = 0; k < insnLen; k++) {
-					locations[rip++] = position;
-				}
-				position++;
-			} catch (EncoderException e) {
-				throw new UnencodeableException(e, item.opcode(), item.instruction());
+			var insnLen = item.encode(code.address() + codeBuf.position()).length;
+			for (int k = 0; k < insnLen; k++) {
+				locations[rip++] = position;
 			}
+			position++;
 		}
 
 		var JUMP_TO_FINISH = new byte[6 + 8];
 		ByteBuffer.wrap(JUMP_TO_FINISH)
-				.order(ByteOrder.nativeOrder())
-				.put(new byte[]{(byte) 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00})
-				.putLong(trampoline.relocate(TEST_CASE_FINISH).address());
+			.order(ByteOrder.nativeOrder())
+			.put(new byte[]{(byte) 0xFF, 0x25, 0x00, 0x00, 0x00, 0x00})
+			.putLong(trampoline_return_address().address());
 
 		codeBuf.put(JUMP_TO_FINISH);
 
@@ -50,7 +39,9 @@ public interface Block {
 	}
 
 	int size();
+
 	SequencedCollection<BlockEntry> items();
+
 	default Block without(int... instructionIndex) {
 		return new SkipBlock(this, Arrays.stream(instructionIndex).boxed().toList());
 	}
@@ -67,5 +58,4 @@ public interface Block {
 		}
 	}
 
-	public record BlockEntry(ResourcePartition partition, Opcode opcode, Instruction instruction, Collection<DeferredMutation> mutations) {}
 }

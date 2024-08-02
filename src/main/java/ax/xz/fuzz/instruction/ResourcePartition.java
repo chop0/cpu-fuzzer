@@ -2,6 +2,7 @@ package ax.xz.fuzz.instruction;
 
 import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
+import ax.xz.fuzz.runtime.Architecture;
 
 import java.lang.foreign.MemorySegment;
 import java.util.*;
@@ -16,15 +17,6 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 		if (memory == null)
 			memory = MemoryPartition.empty();
 	}
-
-	public static ResourcePartition all(boolean evex) {
-		return new ResourcePartition(StatusFlag.all(), evex ? RegisterSet.ALL_EVEX : RegisterSet.ALL_VEX, MemoryPartition.addressSpace64(), MemorySegment.NULL);
-	}
-
-	public static ResourcePartition all(boolean evex, MemorySegment ms) {
-		return new ResourcePartition(StatusFlag.all(), evex ? RegisterSet.ALL_EVEX : RegisterSet.ALL_VEX, MemoryPartition.of(ms), MemorySegment.NULL);
-	}
-
 
 	public long selectAddress(RandomGenerator random, int requiredSize, int alignment, int addressWidthBytes) throws NoPossibilitiesException {
 		return memory.selectSegment(random, requiredSize, alignment, addressWidthBytes);

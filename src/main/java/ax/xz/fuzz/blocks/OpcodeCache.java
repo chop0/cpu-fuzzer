@@ -1,15 +1,15 @@
 package ax.xz.fuzz.blocks;
 
+import ax.xz.fuzz.instruction.MemoryPartition;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
-import ax.xz.fuzz.runtime.CPUState;
-import ax.xz.fuzz.runtime.ExecutionResult;
-import ax.xz.fuzz.runtime.Tester;
+import ax.xz.fuzz.instruction.StatusFlag;
+import ax.xz.fuzz.runtime.*;
+import ax.xz.fuzz.runtime.state.CPUState;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.cfg.MapperConfig;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.github.icedland.iced.x86.Code;
 import com.github.icedland.iced.x86.FlowControl;
 import com.github.icedland.iced.x86.Instruction;
@@ -28,6 +28,12 @@ import static com.github.icedland.iced.x86.Code.*;
 
 public record OpcodeCache(int version, Opcode[] opcodes) {
 	private static final Set<Integer> blacklistedOpcodes = Set.of(
+		BOUND_R16_M1616, BOUND_R32_M3232,
+		STOSB_M8_AL, STOSD_M32_EAX, STOSW_M16_AX, STOSQ_M64_RAX,
+		SCASB_AL_M8, SCASW_AX_M16, SCASD_EAX_M32, SCASQ_RAX_M64,
+		LODSB_AL_M8, LODSW_AX_M16, LODSD_EAX_M32, LODSQ_RAX_M64,
+		MOVSB_M8_M8, MOVSW_M16_M16, MOVSD_M32_M32, MOVSQ_M64_M64,
+		CMPSB_M8_M8, CMPSD_M32_M32, CMPSW_M16_M16, CMPSQ_M64_M64,
 		INCSSPD_R32, INCSSPQ_R64, RDSSPD_R32, RDSSPQ_R64, RSTORSSP_M64, SAVEPREVSSP, SETSSBSY,
 		WRSSD_M32_R32, WRSSQ_M64_R64, WRUSSD_M32_R32, WRUSSQ_M64_R64,
 		XSAVE_MEM, XSAVES_MEM, XSAVEC_MEM, XSAVE64_MEM, XSAVEC64_MEM, XSAVES64_MEM,
@@ -35,7 +41,7 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		CLZEROD, CLZEROW, CLZEROQ,
 		CLUI, STUI,
 		XGETBV,
-		RDPKRU,WRPKRU,
+		RDPKRU, WRPKRU,
 		RDSEED_R16, RDSEED_R32, RDSEED_R64,
 		RDRAND_R16, RDRAND_R32, RDRAND_R64,
 		RDTSC, RDTSCP, RDPMC,
@@ -58,6 +64,36 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		}
 	}
 
+	private static Opcode[] loadCachedOpcodes() {
+		try {
+			var mapper = getMapper();
+			var opcodes = mapper.readValue(OPCODES_CACHE_PATH.toFile(), OpcodeCache.class);
+			if (opcodes.version != OPCODES_CACHE_VERSION)
+				return null;
+
+			return opcodes.opcodes();
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	private static Opcode[] findValidOpcodes() {
+		return getOpcodeIDs()
+			.filter(OpcodeCache::isOpcodeAllowed)
+			.filter(OpcodeCache::doesOpcodeWork)
+			.toArray(Opcode[]::new);
+	}
+
+	private static void saveCachedOpcodes(Opcode[] opcodes) {
+		try {
+			var mapper = getMapper();
+
+			mapper.writeValue(OPCODES_CACHE_PATH.toFile(), new OpcodeCache(OPCODES_CACHE_VERSION, opcodes));
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
 	public static ObjectMapper getMapper() {
 		var mapper = new ObjectMapper();
 		mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
@@ -72,54 +108,29 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		return mapper;
 	}
 
-	private static Opcode[] loadCachedOpcodes() {
-		try {
-			var mapper = getMapper();
-			var opcodes = mapper.readValue(OPCODES_CACHE_PATH.toFile(), OpcodeCache.class);
-			if (opcodes.version != OPCODES_CACHE_VERSION)
-				return null;
-
-			return opcodes.opcodes();
-		} catch (Exception e) {
-			return null;
-		}
-	}
-
-	private static void saveCachedOpcodes(Opcode[] opcodes) {
-		try {
-			var mapper = getMapper();
-
-			mapper.writeValue(OPCODES_CACHE_PATH.toFile(), new OpcodeCache(OPCODES_CACHE_VERSION, opcodes));
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-
-
-	private static Opcode[] findValidOpcodes() {
-		return getOpcodeIDs()
-				.filter(OpcodeCache::isOpcodeAllowed)
-				.filter(OpcodeCache::doesOpcodeWork)
-				.toArray(Opcode[]::new);
-	}
-
 	private static Stream<Opcode> getOpcodeIDs() {
 		return Arrays.stream(Code.class.getFields())
-				.filter(field -> (field.getModifiers() & (Modifier.FINAL | Modifier.STATIC)) == (Modifier.FINAL | Modifier.STATIC))
-				.map(field -> {
-					int opCode;
+			.filter(field -> (field.getModifiers() & (Modifier.FINAL | Modifier.STATIC)) == (Modifier.FINAL | Modifier.STATIC))
+			.map(field -> {
+				int opCode;
 
-					try {
-						opCode = field.getInt(null);
-					} catch (IllegalAccessException e) {
-						throw new ExceptionInInitializerError(e);
-					}
+				try {
+					opCode = field.getInt(null);
+				} catch (IllegalAccessException e) {
+					throw new ExceptionInInitializerError(e);
+				}
 
-					return Opcode.of(opCode, field.getName());
-				}).filter(Objects::nonNull);
+				return Opcode.of(opCode, field.getName());
+			}).filter(Objects::nonNull);
 	}
 
 	private static boolean isOpcodeAllowed(Opcode opcode) {
+		var info = Code.toOpCode(opcode.icedVariant());
+		var op = info.getOpCode();
+		if (!info.getLongMode())
+			return false;
+		if ((op & 0x40) == 0x40 || op == 0xc4 || op == 0xc5 || op == 0xd5 || op == 0x81 || op == 0x83)
+			return false;
 		var name = opcode.icedFieldName();
 		var icedID = opcode.icedVariant();
 
@@ -140,16 +151,26 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		return true;
 	}
 
+	private static final Random r = new Random(0);
 	private static boolean doesOpcodeWork(Opcode opcode) {
 		try (var arena = Arena.ofConfined()) {
+			var executor = SequenceExecutor.withIndex(Config.defaultConfig(), 0);
 			var scratch = mmap(arena, MemorySegment.ofAddress(0x4000000), 4096, READ, WRITE);
-			var rp = ResourcePartition.all(true, scratch);
-			var insn = opcode.configureRandomly(new Random(0), rp);
+			var rp = new ResourcePartition(StatusFlag.all(), executor.legallyModifiableRegisters(), MemoryPartition.of(scratch), scratch);
+			var insn = opcode.configureRandomly(r, rp);
 
-			var result = Tester.runBlock(CPUState.filledWith(scratch.address()), new BasicBlock(List.of(new Block.BlockEntry(rp, opcode, insn, List.of()))));
+			Block[] blocks = { new BasicBlock(List.of(
+				BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(),
+				new BlockEntry.FuzzEntry(rp, opcode, insn, List.of()),
+				BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1()
+			)) };
+			Branch[] branches = { new Branch(ExecutableSequence.BranchType.JA, 1, 1)};
+			var result = executor.runSequence(CPUState.filledWith(scratch.address()), new ExecutableSequence(blocks, branches)).result();
 			return !(result instanceof ExecutionResult.Fault.Sigill);
-		} catch (Block.UnencodeableException e) {
-			return false;
+		} catch (RuntimeException e) {
+			if (e.getCause() instanceof Block.UnencodeableException)
+				return false;
+			else throw e;
 		}
 	}
 }

@@ -205,10 +205,11 @@ public class InterleavedBlock implements Block {
 	public String toString() {
 		var sb = new StringBuilder();
 		for (var item : items()) {
-			var bytes = ExecutableSequence.encode(new CodeAssembler(64), item.instruction());
-
-			for (var deferredMutation : item.mutations()) {
-				bytes = deferredMutation.perform(bytes);
+			byte[] bytes = null;
+			try {
+				bytes = item.encode(0);
+			} catch (UnencodeableException e) {
+				throw new RuntimeException(e);
 			}
 
 			sb.append("new byte[]{");

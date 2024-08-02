@@ -27,47 +27,13 @@ demo:
 
 .align 4096
 	after_align:
-	push 515
-	popfq
 
-	vmovups zmm0, [rip + zeros]
-	vmovups zmm1, [rip + zeros]
-	vmovups zmm2, [rip + zeros]
-	vmovups zmm3, [rip + zeros]
-	vmovups zmm4, [rip + zeros]
-	vmovups zmm5, [rip + zeros]
-	vmovups zmm6, [rip + zeros]
-	vmovups zmm7, [rip + zeros]
-	vmovups zmm8, [rip + zeros]
-	vmovups zmm9, [rip + zeros]
-	vmovups zmm10, [rip + zeros]
-	vmovups zmm11, [rip + zeros]
-	vmovups zmm12, [rip + zeros]
-	vmovups zmm13, [rip + zeros]
-	vmovups zmm14, [rip + zeros]
-	vmovups zmm15, [rip + zeros]
-	vmovups zmm16, [rip + zeros]
-	vmovups zmm17, [rip + zeros]
-	vmovups zmm18, [rip + zeros]
-	vmovups zmm19, [rip + zeros]
-	vmovups zmm20, [rip + zeros]
-	vmovups zmm21, [rip + zeros]
-	vmovups zmm22, [rip + zeros]
-	vmovups zmm23, [rip + zeros]
-	vmovups zmm24, [rip + zeros]
-	vmovups zmm25, [rip + zeros]
-	vmovups zmm26, [rip + zeros]
-	vmovups zmm27, [rip + zeros]
-	vmovups zmm28, [rip + zeros]
-	vmovups zmm29, [rip + zeros]
-	vmovups zmm30, [rip + zeros]
-	vmovups zmm31, [rip + zeros]
+	movq rbx, 0x00000000fffff9d0
+		sbb    ebx,0x67
+	movsldup xmm9, [rip + mem_1]
+	vaesenclast xmm4, xmm12, [rip + mem_2]
 
-	vmovaps xmm0,xmm1
-	vcmppd ymm0,ymm14,ymm8,0x4a
-	vmulsd xmm11,xmm11,xmm0
-
-	vmovups [rdi], xmm11
+	movq [rdi], rbx
 
 	pop rbp
 	pop rbx
@@ -86,8 +52,7 @@ loop:
 	callq demo
 
 	leaq rdi, [rsp]
-	mov rsi, r8
-	movq rdx, r9
+	mov rsi, 8
 	callq print_result
 
 	movq rax, rdi

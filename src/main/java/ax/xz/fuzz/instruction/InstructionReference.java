@@ -7,7 +7,6 @@ import org.xml.sax.SAXException;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Function;
@@ -31,6 +30,7 @@ public class InstructionReference {
 
 		var statusFlags = mnemonicToOperands(doc, InstructionReference::statusFlags);
 		var registers = mnemonicToOperands(doc, InstructionReference::registers);
+		var registersBase = mnemonicToOperands(doc, InstructionReference::registersBase);
 
 		var s = new HashMap<String, Operand[]>();
 		var keys = new HashSet<>(statusFlags.keySet());
@@ -39,12 +39,13 @@ public class InstructionReference {
 		for (var mnemonic : keys) {
 			Set<? extends Operand> flags = statusFlags.getOrDefault(mnemonic, Set.of());
 			Set<? extends Operand> regs = registers.getOrDefault(mnemonic, Set.of());
-			var all = concat(flags.stream(), regs.stream()).toArray(Operand[]::new);
+			Set<? extends Operand> regsBase = registersBase.getOrDefault(mnemonic, Set.of());
+			var all = concat(regsBase.stream(), concat(flags.stream(), regs.stream())).toArray(Operand[]::new);
 			s.put(mnemonic, all);
 		}
 
-		s.put("ZEROUPPER", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
-		s.put("ZEROALL", RegisterSet.ZMM_EVEX.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
+		s.put("ZEROUPPER", RegisterSet.ZMM_AVX512.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
+		s.put("ZEROALL", RegisterSet.ZMM_AVX512.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
 
 		suppressedOperands = Collections.unmodifiableMap(s);
 		System.out.println("Loaded " + suppressedOperands.size() + " suppressed operands");
@@ -133,6 +134,23 @@ public class InstructionReference {
 			.flatMapToInt(n -> Arrays.stream(RegisterSet.getAssociatedRegisters(n)))
 				.mapToObj(Operand.ImplicitReg::new)
 				.collect(toSet());
+	}
+
+	public static Set<Operand.ImplicitReg> registersBase(Node instruction) {
+		return stream(instruction.getChildNodes())
+			.filter(op -> op instanceof Element)
+			.filter(op -> op.getAttributes().getNamedItem("suppressed") != null)
+			.map(node -> ((Element) node).getAttribute("base"))
+			.filter(c -> !c.isBlank())
+			.map(n -> {
+				var id = Registers.byName(n);
+				if (id == null)
+					throw new NullPointerException(n + " not found");
+				return id;
+			})
+			.flatMapToInt(n -> Arrays.stream(RegisterSet.getAssociatedRegisters(n)))
+			.mapToObj(Operand.ImplicitReg::new)
+			.collect(toSet());
 	}
 
 	private static Stream<Node> stream(NodeList nl) {

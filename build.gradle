@@ -29,7 +29,7 @@ tasks.withType(JavaCompile).each {
 application {
 	mainModule = 'ax.xz.fuzz'
 	mainClass = 'ax.xz.fuzz.Master'
-	applicationDefaultJvmArgs = ["-Dcom.sun.management.jmxremote.port=9999", "--enable-preview", "-Djava.library.path=${projectDir}/build/libs/main/shared", "--add-opens=java.base/java.util=com.fasterxml.jackson.databind"]
+	applicationDefaultJvmArgs = ["--enable-preview", "-Djava.library.path=${projectDir}/build/libs/main/shared", "--add-opens=java.base/java.util=com.fasterxml.jackson.databind"]
 }
 
 dependencies {
@@ -42,6 +42,9 @@ dependencies {
 	implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
 	implementation 'com.fasterxml.jackson.core:jackson-core:2.17.2'
 	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.2'
+
+	implementation 'org.codehaus.woodstox:stax2-api:4.2.2'
+	implementation 'com.fasterxml.woodstox:woodstox-core:7.0.0'
 
 	implementation 'info.picocli:picocli:4.7.6'
 
@@ -57,7 +60,7 @@ jextract {
 		libraries = ['slave']
 		targetPackage = 'ax.xz.fuzz.tester'
 		className = "slave_h"
-		functions = ['maybe_allocate_signal_stack', 'do_test', 'mmap', 'munmap']
+		functions = ['trampoline_return_address', 'maybe_allocate_signal_stack', 'do_test', 'mmap', 'munmap']
 		constants = ['ILL_ILLOPC',
 			     'ILL_ILLOPN',
 			     'ILL_ILLADR',
@@ -124,8 +127,9 @@ model {
 
 			eachPlatform {
 				cCompiler.withArguments { args ->
-					args << "-std=gnu11"
+					args << "-std=gnu2x"
 					args << "-march=skylake"
+					args << "-g"
 				}
 			}
 		}
@@ -141,6 +145,12 @@ model {
 	components {
 		main(NativeLibrarySpec) {
 			targetPlatform "linux"
+		}
+	}
+
+	binaries {
+		all {
+			cCompiler.args "-g"
 		}
 	}
 }

@@ -2,23 +2,18 @@ package ax.xz.fuzz.mutate;
 
 import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.instruction.Opcode;
-import ax.xz.fuzz.instruction.Operand;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
+import com.github.icedland.iced.x86.OpKind;
 
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.mutate.Prefixes.isPrefix;
+import static ax.xz.fuzz.mutate.Encoding.isPrefix;
 
 public class RexAdder implements Mutator {
 	@Override
 	public boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction) {
-		for (Operand op : code.operands()) {
-			if (op.counted()) {
-				return false;
-			}
-		}
-		return true;
+		return false;
 	}
 
 	@Override
@@ -28,7 +23,15 @@ public class RexAdder implements Mutator {
 
 	@Override
 	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction) {
-		return new RexMutation((byte) ((0x40 | (byte) rng.nextInt(0x10)) & ~(1)));
+		byte bitsDisableMask = 0b0101;
+		if (Encoding.hasImmediate(instruction))
+			bitsDisableMask |= 0b1000; // can fuck up length decoding
+		if (Encoding.hasSIBIndex(instruction) || instruction.hasOpKind(OpKind.MEMORY))
+			bitsDisableMask |= 0b0010;
+		if (Encoding.hasSIBBase(instruction))
+			bitsDisableMask |= 0b0001;
+
+		return new RexMutation((byte) ((0x40 | (byte) rng.nextInt(0x10)) & ~(bitsDisableMask)));
 	}
 
 	@Override

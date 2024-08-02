@@ -51,7 +51,7 @@ public class PrefixAdder implements Mutator {
 			byte addedPrefix;
 			do {
 				addedPrefix =  PREFIXES[rng.nextInt(PREFIXES.length)];
-			} while (!canUsePrefix(rp, addedPrefix));
+			} while (!canUsePrefix(instruction, rp, addedPrefix));
 
 			prefixes.add(new AddedPrefix(addedPrefix));
 		}
@@ -70,7 +70,7 @@ public class PrefixAdder implements Mutator {
 	}
 
 
-	private boolean canUsePrefix(ResourcePartition rp, byte prefix) {
+	private boolean canUsePrefix(Instruction insn, ResourcePartition rp, byte prefix) {
 		return switch (prefix) {
 			case 0x2e -> rp.allowedRegisters().hasRegister(CS);
 			case 0x36 -> rp.allowedRegisters().hasRegister(SS);
@@ -78,6 +78,7 @@ public class PrefixAdder implements Mutator {
 			case 0x26 -> rp.allowedRegisters().hasRegister(ES);
 			case 0x64 -> rp.allowedRegisters().hasRegister(FS);
 			case 0x65 -> rp.allowedRegisters().hasRegister(GS);
+			case 0x66, 0x67 -> Encoding.hasImmediate(insn);
 			default -> true;
 		};
 	}

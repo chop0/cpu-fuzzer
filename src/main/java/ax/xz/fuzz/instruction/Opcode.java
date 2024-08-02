@@ -4,15 +4,16 @@ import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.parse.OperandLexer;
 import ax.xz.fuzz.parse.OperandParser;
+import ax.xz.fuzz.runtime.Architecture;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.github.icedland.iced.x86.Instruction;
-import com.github.icedland.iced.x86.OpKind;
 import com.github.icedland.iced.x86.enc.Encoder;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 
+import java.lang.foreign.MemorySegment;
 import java.util.*;
 import java.util.random.RandomGenerator;
 import java.util.stream.Collectors;
@@ -33,7 +34,9 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 		this.operands = operands;
 
 		// guess the width of the immediate operands
-		var insn = configureRandomly(new Random(0), ResourcePartition.all(true));
+		var mem = MemorySegment.ofAddress(0x40000).reinterpret(0x1000);
+		var anything = new ResourcePartition(StatusFlag.all(), Architecture.supportedRegisters(), MemoryPartition.of(mem), mem);
+		var insn = configureRandomly(new Random(0), anything);
 
 		var encoder = new Encoder(64, _ -> {
 		});
@@ -73,7 +76,9 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 				Arrays.stream(sops))
 				.toArray(Operand[]::new);
 
-		if (!Arrays.stream(operands).allMatch(n -> n.fulfilledBy(ResourcePartition.all(true))))
+		var fakeMem = MemorySegment.ofAddress(0x4000).reinterpret(0x1000);
+		var supportedSet = new ResourcePartition(StatusFlag.all(), Architecture.supportedRegisters(), MemoryPartition.of(fakeMem), fakeMem);
+		if (!Arrays.stream(operands).allMatch(n -> n.fulfilledBy(supportedSet)))
 			return null;
 
 		if (operands.length < Instruction.create(icedVariant).getOpCount())
@@ -123,9 +128,9 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 //		insn.setRepPrefix(rng.nextInt(30) == 0);
 //		insn.setLockPrefix(rng.nextInt(30) == 0);
 
-		if (rng.nextInt(3) == 0) {
-			insn.setSegmentPrefix(RegisterSet.SEGMENT.select(rng));
-		}
+//		if (rng.nextInt(3) == 0) {
+//			insn.setSegmentPrefix(RegisterSet.SEGMENT.select(rng));
+//		}
 
 //		if ( rng.nextBoolean()) {
 //			switch (rng.nextInt(3)) {

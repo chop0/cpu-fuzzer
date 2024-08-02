@@ -33,17 +33,17 @@ public final class RegisterSet implements Iterable<Integer> {
 
 	public static RegisterSet MM = RegisterSet.of(rangeClosed(MM0, MM7).toArray());
 
-	public static RegisterSet XMM_VEX = RegisterSet.of(rangeClosed(XMM0, XMM15).toArray());
-	public static RegisterSet XMM_EVEX = RegisterSet.of(rangeClosed(XMM0, XMM31).toArray());
+	public static RegisterSet XMM_AVX2 = RegisterSet.of(rangeClosed(XMM0, XMM15).toArray());
+	public static RegisterSet XMM_AVX512 = RegisterSet.of(rangeClosed(XMM0, XMM31).toArray());
 
-	public static RegisterSet YMM_VEX = RegisterSet.of(rangeClosed(YMM0, YMM15).toArray());
-	public static RegisterSet YMM_EVEX = RegisterSet.of(rangeClosed(YMM0, YMM31).toArray());
+	public static RegisterSet YMM_AVX2 = RegisterSet.of(rangeClosed(YMM0, YMM15).toArray());
+	public static RegisterSet YMM_AVX512 = RegisterSet.of(rangeClosed(YMM0, YMM31).toArray());
 
 	public static RegisterSet ZMM_VEX = RegisterSet.of(rangeClosed(ZMM0, ZMM15).toArray());
-	public static RegisterSet ZMM_EVEX = RegisterSet.of(rangeClosed(ZMM0, ZMM31).toArray());
+	public static RegisterSet ZMM_AVX512 = RegisterSet.of(rangeClosed(ZMM0, ZMM31).toArray());
 
-	public static RegisterSet VECTOR_VEX = MM.union(XMM_VEX).union(YMM_VEX).union(ZMM_VEX);
-	public static RegisterSet VECTOR_EVEX = MM.union(XMM_EVEX).union(YMM_EVEX).union(ZMM_EVEX);
+	public static RegisterSet VECTOR_VEX = MM.union(XMM_AVX2).union(YMM_AVX2);
+	public static RegisterSet VECTOR_EVEX = MM.union(XMM_AVX512).union(YMM_AVX512).union(ZMM_AVX512);
 
 
 	public static RegisterSet TMM = RegisterSet.of(rangeClosed(TMM0, TMM7).toArray());
@@ -54,8 +54,8 @@ public final class RegisterSet implements Iterable<Integer> {
 
 	public static RegisterSet SEGMENT = RegisterSet.of(rangeClosed(ES, GS).toArray());
 	public static final RegisterSet SPECIAL = of(Registers.MXCSR);
-	public static RegisterSet ALL_VEX = GP.union(VECTOR_VEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
-	public static RegisterSet ALL_EVEX = GP.union(ST).union(VECTOR_EVEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
+	public static RegisterSet ALL_AVX2 = GP.union(VECTOR_VEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
+	public static RegisterSet ALL_AVX512 = GP.union(ST).union(VECTOR_EVEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
 
 	public static RegisterSet EMPTY = new RegisterSet(new BitSet());
 
@@ -91,9 +91,9 @@ public final class RegisterSet implements Iterable<Integer> {
 	public static RegisterSet vector(int size, boolean hasEvexPrefix) {
 		return switch (size) {
 			case 64 -> MM;
-			case 128 -> hasEvexPrefix ? XMM_EVEX : XMM_VEX;
-			case 256 -> hasEvexPrefix ? YMM_EVEX : YMM_VEX;
-			case 512 -> hasEvexPrefix ? ZMM_EVEX : ZMM_VEX;
+			case 128 -> hasEvexPrefix ? XMM_AVX512 : XMM_AVX2;
+			case 256 -> hasEvexPrefix ? YMM_AVX512 : YMM_AVX2;
+			case 512 -> hasEvexPrefix ? ZMM_AVX512 : ZMM_VEX;
 			default -> throw new IllegalStateException("Unexpected operand size: " + size);
 		};
 	}

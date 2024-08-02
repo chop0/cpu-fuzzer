@@ -1,7 +1,10 @@
 package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.blocks.BasicBlock;
+import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.StatusFlag;
+import ax.xz.fuzz.runtime.state.CPUState;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -15,9 +18,17 @@ import com.github.icedland.iced.x86.dec.Decoder;
 import com.github.icedland.iced.x86.fmt.StringOutput;
 import com.github.icedland.iced.x86.fmt.gas.GasFormatter;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Objects;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
+
+import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
+import static ax.xz.fuzz.runtime.MemoryUtils.mmap;
 
 public record RecordedTestCase(
 	CPUState initialState,
@@ -29,9 +40,9 @@ public record RecordedTestCase(
 	@JsonSerialize(converter = InstructionSerializer.class)
 	@JacksonXmlElementWrapper(useWrapping = false)
 	byte[][][] code2,
-	long trampolineLocation,
+	long codeLocation,
 	Branch[] branches,
-	long[] scratchRegions
+	SerialisedRegion... memory
 ) {
 	public RecordedTestCase {
 		if (code1 == null) {
@@ -40,6 +51,14 @@ public record RecordedTestCase(
 		if (code2 == null) {
 			code2 = new byte[0][][];
 		}
+	}
+
+	public Block[] blocksA() {
+		return Arrays.stream(code1).map(BasicBlock::ofEncoded).toArray(Block[]::new);
+	}
+
+	public Block[] blocksB() {
+		return Arrays.stream(code2).map(BasicBlock::ofEncoded).toArray(Block[]::new);
 	}
 
 	public long encodedSize() {
@@ -153,30 +172,74 @@ public record RecordedTestCase(
 	}
 
 	public static void main(String[] args) {
-		var tester = Tester.create(Config.defaultConfig(), RegisterSet.ALL_EVEX, StatusFlag.all());
-		var result = tester.runTest(true).getValue().orElseThrow();
+		var tester = Tester.create(Config.defaultConfig());
+		var result = tester.record(tester.runTest().tc());
 		var xml = result.toXML();
 		var result2 = RecordedTestCase.fromXML(xml);
 
 		System.out.println(result.equals(result2));
 	}
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof RecordedTestCase that)) return false;
+	public record SerialisedRegion(byte[] compressedData, long start, long size) {
+		public static SerialisedRegion ofRegion(MemorySegment region) {
+			ByteBuffer output = ByteBuffer.allocate((int) region.byteSize());
 
-		return trampolineLocation == that.trampolineLocation && Arrays.deepEquals(code1, that.code1) && Arrays.deepEquals(code2, that.code2) && Arrays.equals(branches, that.branches) && Objects.equals(initialState, that.initialState) && Arrays.equals(scratchRegions, that.scratchRegions);
-	}
+			var def = new Deflater();
+			def.setLevel(Deflater.BEST_COMPRESSION);
 
-	@Override
-	public int hashCode() {
-		int result = Objects.hashCode(initialState);
-		result = 31 * result + Arrays.deepHashCode(code1);
-		result = 31 * result + Arrays.deepHashCode(code2);
-		result = 31 * result + Long.hashCode(trampolineLocation);
-		result = 31 * result + Arrays.hashCode(branches);
-		result = 31 * result + Arrays.hashCode(scratchRegions);
-		return result;
+			try {
+				def.setInput(region.asByteBuffer());
+				def.finish();
+				while (def.deflate(output) > 0) {
+					if (output.remaining() == 0) {
+						var newOutput = ByteBuffer.allocate(output.capacity() * 2);
+						output.flip();
+						newOutput.put(output);
+						output = newOutput;
+					}
+				}
+			} finally {
+				def.end();
+			}
+
+			byte[] data;
+			if (output.remaining() == 0)
+				data = output.array();
+			else {
+				data = new byte[output.position()];
+				output.flip();
+				output.get(data);
+			}
+
+			return new SerialisedRegion(data, region.address(), region.byteSize());
+		}
+
+		public MemorySegment allocate(Arena arena) throws DataFormatException {
+			var output = mmap(arena, MemorySegment.ofAddress(start), size, READ, WRITE, EXECUTE);
+
+			var inflater = new Inflater();
+			try {
+				inflater.setInput(compressedData);
+				inflater.inflate(output.asByteBuffer());
+			} finally {
+				inflater.end();
+			}
+
+			return output;
+		}
+
+		public byte[] decompressed() throws DataFormatException {
+			var output = new byte[(int) size];
+
+			var inflater = new Inflater();
+			try {
+				inflater.setInput(compressedData);
+				inflater.inflate(output);
+			} finally {
+				inflater.end();
+			}
+
+			return output;
+		}
 	}
 }

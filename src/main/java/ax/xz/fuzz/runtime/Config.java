@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
 
+import static com.github.icedland.iced.x86.Register.R15;
 import static picocli.CommandLine.Help.Visibility.ALWAYS;
 import static picocli.CommandLine.Model.*;
 import static picocli.CommandLine.*;
@@ -40,6 +41,10 @@ public final class Config {
 
 	public static Config defaultConfig() {
 		return new Config(ForkJoinPool.getCommonPoolParallelism(), 2, 10, 100, Optional.empty());
+	}
+
+	public int counterRegister() {
+		return R15;
 	}
 
 	public int threadCount() {

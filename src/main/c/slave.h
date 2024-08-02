@@ -1,3 +1,4 @@
+#pragma once
 #define _GNU_SOURCE
 
 #include <stdint.h>
@@ -16,9 +17,6 @@
 #else
 #define AVX_REGISTERS 16
 #endif
-
-extern uint8_t routine_begin;
-extern uint8_t routine_end;
 
 
 typedef struct {
@@ -51,6 +49,6 @@ struct execution_result {
     };
 };
 
-void do_test( void (*trampoline)(void), uint8_t *code, size_t code_length, struct execution_result *result);
-void test_case_exit(void);
+void *trampoline_return_address(void);
+void do_test(uint8_t *code, size_t code_length, struct execution_result *result);
 void* maybe_allocate_signal_stack(void);

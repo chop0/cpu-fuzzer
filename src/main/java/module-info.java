@@ -12,6 +12,8 @@ module ax.xz.fuzz {
 	requires info.picocli;
 	requires jdk.jfr;
 
+	requires com.ctc.wstx;
+
 
 	opens ax.xz.fuzz.blocks to com.fasterxml.jackson.databind;
 	opens ax.xz.fuzz.instruction to com.fasterxml.jackson.databind;
@@ -19,4 +21,5 @@ module ax.xz.fuzz {
 	opens ax.xz.fuzz.runtime to com.fasterxml.jackson.databind, info.picocli;
 	opens ax.xz.fuzz to com.fasterxml.jackson.databind;
 	opens ax.xz.fuzz.metrics to com.fasterxml.jackson.databind;
+	opens ax.xz.fuzz.runtime.state to com.fasterxml.jackson.databind, info.picocli;
 }

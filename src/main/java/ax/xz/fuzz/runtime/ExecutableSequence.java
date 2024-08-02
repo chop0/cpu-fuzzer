@@ -16,16 +16,15 @@ import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.random.RandomGenerator;
 
+import static ax.xz.fuzz.tester.slave_h.trampoline_return_address;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 public final class ExecutableSequence {
 
-	public static final MemorySegment TEST_CASE_FINISH = SymbolLookup.loaderLookup().find("test_case_exit").orElseThrow();
 	private final Block[] blocks;
 	private final Branch[] branches;
 
 	private final CodeAssembler blockAssembler = new CodeAssembler(64);
-	private final CodeAssembler instructionAssembler = new CodeAssembler(64);
 
 	private MemorySegment lastCode;
 
@@ -39,20 +38,10 @@ public final class ExecutableSequence {
 		System.arraycopy(branches, 0, this.branches, 0, branches.length);
 	}
 
+	public int encode(MemorySegment code, Config config) throws Block.UnencodeableException {
+		int counterRegister = config.counterRegister();
+		int counterBound = config.branchLimit();
 
-	public static byte[] encode(CodeAssembler instructionAssembler, Instruction instruction) {
-		byte[] result = new byte[15];
-		var buf = ByteBuffer.wrap(result);
-		instructionAssembler.reset();
-		instructionAssembler.addInstruction(instruction);
-		instructionAssembler.assemble(buf::put, 0);
-		var trimmed = new byte[buf.position()];
-		System.arraycopy(result, 0, trimmed, 0, trimmed.length);
-
-		return trimmed;
-	}
-
-	public int encode(long rip, Trampoline trampoline, MemorySegment code, int counterRegister, int counterBound) {
 		var counter = new AsmRegister64(new ICRegister(counterRegister));
 		blockAssembler.reset();
 
@@ -81,15 +70,7 @@ public final class ExecutableSequence {
 				if (item == null)
 					throw new IllegalArgumentException("instruction must not be null");
 
-				var insn = item.instruction();
-
-				var encoded = encode(instructionAssembler, insn);
-
-				for (var mutation : item.mutations()) {
-					encoded = mutation.perform(encoded);
-				}
-
-				blockAssembler.db(encoded);
+				blockAssembler.db(item.encode(0));
 			}
 
 			branches[i].type().perform.accept(blockAssembler, blockHeaders[branches[i].takenIndex()]);
@@ -97,11 +78,11 @@ public final class ExecutableSequence {
 		}
 
 		blockAssembler.label(exit);
-		blockAssembler.jmp(trampoline.relocate(TEST_CASE_FINISH).address());
+		blockAssembler.jmp(trampoline_return_address().address());
 
 		var bb = code.asByteBuffer();
 		int initialPosition = bb.position();
-		var result = (CodeAssemblerResult) blockAssembler.assemble(bb::put, rip);
+		var result = (CodeAssemblerResult) blockAssembler.assemble(bb::put, code.address());
 		lastCode = code.asSlice(initialPosition, bb.position());
 		return bb.position() - initialPosition;
 	}

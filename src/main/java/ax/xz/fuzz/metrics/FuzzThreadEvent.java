@@ -1,6 +1,5 @@
 package ax.xz.fuzz.metrics;
 
-import ax.xz.fuzz.runtime.Tester;
 import jdk.jfr.*;
 
 import java.lang.annotation.ElementType;

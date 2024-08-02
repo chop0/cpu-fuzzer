@@ -4,23 +4,17 @@ import java.util.*;
 
 
 public record BasicBlock(List<BlockEntry> items) implements Block {
+	public static BasicBlock ofEncoded(byte[][] blocks) {
+		var items = new ArrayList<BlockEntry>();
+		for (var block : blocks) {
+			items.add(new BlockEntry.ConcreteEntry(block));
+		}
+		return new BasicBlock(items);
+	}
 
 	@Override
 	public int size() {
 		return items.size();
-	}
-
-	@Override
-	public String toString() {
-		var sb = new StringBuilder();
-		for (var item : items) {
-			for (var deferredMutation : item.mutations()) {
-				sb.append(deferredMutation).append(" ");
-			}
-			sb.append(item.instruction()).append("\n");
-		}
-
-		return sb.toString();
 	}
 
 	@Override

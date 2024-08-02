@@ -5,10 +5,11 @@ import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.Operand;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
+import com.github.icedland.iced.x86.info.OpCodeTableKind;
 
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.mutate.Prefixes.isPrefix;
+import static ax.xz.fuzz.mutate.Encoding.isPrefix;
 
 public class VexAdder implements Mutator {
 

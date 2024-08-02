@@ -9,7 +9,7 @@ import com.github.icedland.iced.x86.Register;
 
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.mutate.Prefixes.isPrefix;
+import static ax.xz.fuzz.mutate.Encoding.isPrefix;
 import static com.github.icedland.iced.x86.Register.*;
 
 public class PrefixDuplicator implements Mutator {

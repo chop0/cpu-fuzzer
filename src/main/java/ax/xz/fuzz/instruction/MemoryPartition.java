@@ -131,7 +131,7 @@ public final record MemoryPartition(MemorySegment ms) {
 			throw new IllegalArgumentException();
 
 		if (size == 0) size = 1;
-		return size <= MEMORY_GRANULARITY;
+		return size <= MEMORY_GRANULARITY && ms.byteSize() >= size;
 	}
 
 }

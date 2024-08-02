@@ -1,8 +1,8 @@
 .att_syntax
-.global routine_begin
-.global test_case_entry
-.global test_case_exit
-.global routine_end
+.global trampoline_begin
+.global trampoline_entrypoint
+.global trampoline_exitpoint
+.global trampoline_end
 
 .macro push_unclobberable_gprs
     push %r12
@@ -160,7 +160,7 @@ done:
 .endm
 
 .text
-routine_begin:
+trampoline_begin:
 saved_rsp:
     .quad 0
 addr:
@@ -175,7 +175,7 @@ temp:
     .quad 0
 
 
-test_case_entry:
+trampoline_entrypoint:
     movq %rdi, addr(%rip)
     movq %rsi, saved_state(%rip)
 
@@ -217,7 +217,7 @@ test_case_entry:
 
 
     jmp *addr(%rip)
-test_case_exit:
+trampoline_exitpoint:
 
     movq %r15, temp(%rip)
     movq saved_state(%rip), %r15
@@ -259,4 +259,4 @@ test_case_exit:
 
     restore_unclobberable_state
     ret
-routine_end:
+trampoline_end:

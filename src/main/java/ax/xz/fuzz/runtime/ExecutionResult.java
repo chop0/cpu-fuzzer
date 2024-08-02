@@ -1,5 +1,6 @@
 package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.runtime.state.CPUState;
 import ax.xz.fuzz.tester.execution_result;
 import ax.xz.fuzz.tester.fault_details;
 
@@ -9,10 +10,9 @@ import java.lang.foreign.MemorySegment;
 public sealed interface ExecutionResult {
 	public static boolean interestingMismatch(ExecutionResult a, ExecutionResult b) {
 		if (a instanceof Success A && b instanceof Success B) {
-			return A.state().gprs().r15() == B.state().gprs().r15() &&
-			       (!A.state().gprs().equals(B.state().gprs())
+			return (!A.state().gprs().equals(B.state().gprs())
 			       || !A.state().zmm().equals(B.state().zmm())
-			       || !A.state().mmx().equals(B.state().mmx()));
+			       || !A.state().mmx().equals(B.state().mmx())) && A.state.gprs().values()[14] == B.state.gprs().values()[14];
 		}
 
 		return false;
