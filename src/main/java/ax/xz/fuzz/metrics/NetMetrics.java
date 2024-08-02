@@ -3,31 +3,33 @@ package ax.xz.fuzz.metrics;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
-public class NetMetrics implements AutoCloseable, ThreadMetrics {
-	private static final VarHandle BRANCHES, FAULTED_SAMPLES, OPCODE_COUNT, SAMPLES, SUCCEEDED_SAMPLES;
+public class NetMetrics implements AutoCloseable {
+	private static class ThreadMetrics {
+		private long faultedSamples, succeededSamples, alarm, branches, mismatch;
+		private final long id;
 
-	static {
-		try {
-			var lookup = MethodHandles.lookup();
-			BRANCHES = lookup.findVarHandle(NetMetrics.class, "branches", long.class);
-			FAULTED_SAMPLES = lookup.findVarHandle(NetMetrics.class, "faultedSamples", long.class);
-			OPCODE_COUNT = lookup.findVarHandle(NetMetrics.class, "opcodeCount", long.class);
-			SAMPLES = lookup.findVarHandle(NetMetrics.class, "samples", long.class);
-			SUCCEEDED_SAMPLES = lookup.findVarHandle(NetMetrics.class, "succeededSamples", long.class);
-		} catch (NoSuchFieldException | IllegalAccessException e) {
-			throw new AssertionError(e);
+		private ThreadMetrics(long id) {
+			this.id = id;
 		}
 	}
 
+	private final AtomicInteger idCounter = new AtomicInteger();
+
+	private final ConcurrentHashMap<Integer, ThreadMetrics> metrics = new ConcurrentHashMap<>();
+	private final ThreadLocal<ThreadMetrics> metricsLocal = ThreadLocal.withInitial(() -> {
+		var id = idCounter.getAndIncrement();
+		var metrics = new ThreadMetrics(id);
+		this.metrics.put(id, metrics);
+		return metrics;
+	});
+
 	private final HttpServer server;
 
-	private volatile long opcodeCount, faultedSamples, succeededSamples, samples, branches;
-
-	public NetMetrics() throws IOException {
+	public NetMetrics() {
 		HttpServer server1;
 		try {
 			server1 = HttpServer.create(new InetSocketAddress(9100), 10);
@@ -38,7 +40,7 @@ public class NetMetrics implements AutoCloseable, ThreadMetrics {
 		this.server = server1;
 	}
 
-	public ThreadMetrics startServer() {
+	public NetMetrics startServer() {
 		if (server != null) {
 			server.createContext("/", ex -> {
 				var response = getMetrics();
@@ -54,24 +56,37 @@ public class NetMetrics implements AutoCloseable, ThreadMetrics {
 	}
 
 	private String getMetrics() {
-		return """
-			opcode_count %d
-			samples_executed_total{faulted="true"} %d
-			samples_executed_total{faulted="false"} %d
-			branches_executed_total %d
-			""".formatted((long) OPCODE_COUNT.get(this), (long) FAULTED_SAMPLES.get(this), (long) SUCCEEDED_SAMPLES.get(this), (long) BRANCHES.get(this));
+		var sb = new StringBuilder();
+		for (var entry : metrics.entrySet()) {
+			int threadId = entry.getKey();
+			sb.append("samples_executed_total{thread=\"%d\", faulted=\"true\"} %d%n".formatted(threadId, entry.getValue().faultedSamples));
+			sb.append("samples_executed_total{thread=\"%d\", faulted=\"false\"} %d%n".formatted(threadId, entry.getValue().succeededSamples));
+			sb.append("timeout{thread=\"%d\"} %d%n".formatted(threadId, entry.getValue().alarm));
+			sb.append("mismatches_total{thread=\"%d\"} %d%n".formatted(threadId, entry.getValue().mismatch));
+			sb.append("branches_executed_total{thread=\"%d\"} %d%n".formatted(threadId, entry.getValue().branches));
+		}
+
+		return sb.toString();
 	}
 
 	public synchronized void incNumSamples(boolean faulted) {
-		SAMPLES.getAndAdd(this, 1);
+		var metrics = metricsLocal.get();
 		if (faulted)
-			FAULTED_SAMPLES.getAndAdd(this, 1);
+			metrics.faultedSamples++;
 		else
-			SUCCEEDED_SAMPLES.getAndAdd(this, 1);
+			metrics.succeededSamples++;
+	}
+
+	public synchronized void incrementAlarm() {
+		metricsLocal.get().alarm++;
 	}
 
 	public void incrementBranches(long n) {
-		BRANCHES.getAndAdd(this, n);
+		metricsLocal.get().branches += n;
+	}
+
+	public void incrementMismatch() {
+		metricsLocal.get().mismatch++;
 	}
 
 	@Override

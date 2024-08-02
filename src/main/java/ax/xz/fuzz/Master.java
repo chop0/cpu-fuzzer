@@ -2,10 +2,8 @@ package ax.xz.fuzz;
 
 import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.StatusFlag;
-import ax.xz.fuzz.runtime.Architecture;
-import ax.xz.fuzz.runtime.Config;
-import ax.xz.fuzz.runtime.Tester;
-import ax.xz.fuzz.runtime.Triage;
+import ax.xz.fuzz.metrics.NetMetrics;
+import ax.xz.fuzz.runtime.*;
 import picocli.CommandLine;
 
 import java.io.File;
@@ -14,6 +12,8 @@ import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.zip.DataFormatException;
+
+import static com.github.icedland.iced.x86.Register.RAX;
 
 public class Master {
 	private static final Object printLock = new Object();
@@ -45,10 +45,10 @@ public class Master {
 	}
 
 	private static void continuousRun(CommandLine cmd, Config config) throws InterruptedException {
-		try (var scope = new StructuredTaskScope.ShutdownOnFailure("Fuzzing", Thread.ofPlatform().factory())) {
+		try (var metrics = new NetMetrics().startServer(); var scope = new StructuredTaskScope.ShutdownOnFailure("Fuzzing", Thread.ofPlatform().factory())) {
 			for (int i = 0; i < config.threadCount(); i++) {
 				int finalI = i;
-				scope.fork(() -> lookForBug(finalI, config));
+				scope.fork(() -> lookForBug(finalI, config, metrics));
 			}
 
 			scope.join();
@@ -58,13 +58,17 @@ public class Master {
 		}
 	}
 
-	private static int lookForBug(int i, Config config) throws InterruptedException {
+	private static int lookForBug(int i, Config config, NetMetrics metrics) throws InterruptedException {
 		Tester t = Tester.create(config);
 
 		while (!Thread.interrupted()) {
 			var results = t.runTest();
 
+			recordResults(config, metrics, results.a());
+			recordResults(config, metrics, results.b());
+
 			if (results.hasInterestingMismatch()) {
+				metrics.incrementMismatch();
 				var xml = t.record(results.tc()).toXML();
 				var outputFile = new File("thread-%d-%d.xml".formatted(i, System.currentTimeMillis()));
 				try (var writer = new FileWriter(outputFile)) {
@@ -86,5 +90,16 @@ public class Master {
 		}
 
 		throw new InterruptedException();
+	}
+
+	private static void recordResults(Config config, NetMetrics metrics, ExecutionResult result) {
+		if (result instanceof ExecutionResult.Success a) {
+			metrics.incNumSamples(false);
+			metrics.incrementBranches(a.state().gprs().values()[14]);
+		} else if (result instanceof ExecutionResult.Fault a) {
+			metrics.incNumSamples(true);
+			if (a instanceof ExecutionResult.Fault.Sigalrm)
+				metrics.incrementAlarm();
+		}
 	}
 }

@@ -13,7 +13,7 @@
 #define ALT_STACKS_BEGIN ((void *) 0xaf0000000)
 
 #define ALT_STACK_SIZE (1048576)
-#define TEST_CASE_TIMEOUT_NS (1000000)
+#define TEST_CASE_TIMEOUT_NS (10000000)
 
 #define thread_local _Thread_local
 
@@ -37,7 +37,9 @@ __attribute__((constructor)) static void __init_page_size(void) {
 #define NUM_IGNORED_SIGNALS (sizeof(ignored_signals) / sizeof(ignored_signals[0]))
 #define assert(x) if (!(x)) { fprintf(stderr, "%s:%d: Assertion failed: %s\n", __FILE__, __LINE__, #x); exit(EXIT_FAILURE); }
 
+#ifndef THREAD_IDX_MAX
 #define THREAD_IDX_MAX 96
+#endif
 
 typedef void trampoline_entrypoint_t(void *code, struct saved_state *saved_state);
 
@@ -57,6 +59,7 @@ typedef  struct {
 	bool faulted;
 	struct fault_details fault_details;
 	sigjmp_buf jmpbuf;
+	pthread_mutex_t mutex;
 } thread_info_t;
 
 #endif

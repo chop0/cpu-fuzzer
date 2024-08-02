@@ -26,7 +26,7 @@ public class ProgramRandomiser {
 
 	public static final Mutator[] mutators = {
 		new PrefixAdder(),
-		new RexAdder(),  // TODO : fix vex adder
+//		new RexAdder(),  // TODO : fix vex adder
 //		new VexAdder(),
 		new PrefixDuplicator()
 	};

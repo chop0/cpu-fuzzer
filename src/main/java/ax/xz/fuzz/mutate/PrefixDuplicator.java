@@ -17,7 +17,7 @@ public class PrefixDuplicator implements Mutator {
 
 	@Override
 	public boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction) {
-		return isRex(instruction) || instruction.getRepePrefix() || instruction.getRepnePrefix() || instruction.getRepPrefix() || instruction.getLockPrefix() || instruction.getSegmentPrefix() != Register.NONE;
+		return true;
 	}
 
 	@Override

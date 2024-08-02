@@ -130,6 +130,8 @@ model {
 					args << "-std=gnu2x"
 					args << "-march=skylake"
 					args << "-g"
+					args << "-Wl,-z,relro"
+					args << "-Wl,-z,now"
 				}
 			}
 		}

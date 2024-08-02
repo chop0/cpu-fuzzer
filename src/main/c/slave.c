@@ -19,6 +19,8 @@
 #include <immintrin.h>
 #include <stdatomic.h>
 #include <fcntl.h>
+#include <sys/timerfd.h>
+#include <sys/syscall.h>
 
 #include <pthread.h>
 
@@ -29,28 +31,38 @@ static void (*java_signal_handlers[NUM_IGNORED_SIGNALS])(int,  siginfo_t *, void
 static void* signal_stack_region;
 
 thread_local int my_thread_idx = -1;
-thread_local timer_t my_timer_id = NULL;
+thread_local int my_timer_fd = NULL;
 
 thread_local uint8_t *debug_file_address = NULL;
 
 thread_info_t active_thread_info [THREAD_IDX_MAX] = {0};
 
+static int tkill(int tid, int sig) {
+	return syscall(SYS_tkill, tid, sig);
+}
+
 static void __timer_arm(void) {
 	static struct itimerspec const test_case_timeout = { .it_value.tv_nsec = TEST_CASE_TIMEOUT_NS };
 
-	if (timer_settime(my_timer_id, 0, &test_case_timeout, NULL) != 0) {
+	pthread_mutex_lock(&active_thread_info[my_thread_idx].mutex);
+	if (timerfd_settime(my_timer_fd, 0, &test_case_timeout, NULL) != 0) {
 		perror("__timer_arm: timer_settime");
 		abort();
 	}
+	active_thread_info[my_thread_idx].active = true;
+	pthread_mutex_unlock(&active_thread_info[my_thread_idx].mutex);
 }
 
 static void __timer_disarm(void) {
 	static struct itimerspec const test_case_timeout = { .it_value.tv_nsec = 0 };
 
-	if (timer_settime(my_timer_id, 0, &test_case_timeout, NULL) != 0) {
+	pthread_mutex_lock(&active_thread_info[my_thread_idx].mutex);
+	if (timerfd_settime(my_timer_fd, 0, &test_case_timeout, NULL) != 0) {
 		perror("__timer_arm: timer_settime");
 		abort();
 	}
+	active_thread_info[my_thread_idx].active = false;
+	pthread_mutex_unlock(&active_thread_info[my_thread_idx].mutex);
 }
 
 static void __construct_trampoline(int thread_idx) {
@@ -72,6 +84,11 @@ static void __construct_alt_stack(int thread_idx) {
 static void __signal_handler_jvm(int signal, siginfo_t *si, void *ptr) {
 	for (int i = 0; i < NUM_IGNORED_SIGNALS; i++) {
 		if (signal == ignored_signals[i]) {
+			if (java_signal_handlers[i] == NULL) {
+				fprintf(stderr, "Unexpected signal: %s\n", strsignal(signal));
+				abort();
+			}
+
 			java_signal_handlers[i](signal, si, ptr);
 			return;
 		}
@@ -89,6 +106,57 @@ static void __save_segment_registers(int index) {
 static void __restore_segment_registers(int index) {
 	_writefsbase_u64((uint64_t) active_thread_info[index].fs_base);
 	_writegsbase_u64((uint64_t) active_thread_info[index].gs_base);
+}
+
+struct signal_monitor_args {
+	int fd;
+	int tid;
+	thread_info_t volatile* thread_info;
+};
+
+static void __signal_monitor(struct signal_monitor_args *args) {
+	int fd = args->fd;
+	int tid = args->tid;
+
+	for (;;) {
+		uint64_t exp;
+		if (read(fd, &exp, sizeof(uint64_t)) == -1) {
+			perror("read");
+			exit(EXIT_FAILURE);
+		}
+
+		pthread_mutex_lock(&args->thread_info->mutex);
+		if ((exp > 0) && args->thread_info->active) {
+			if (tkill(tid, SIGALRM) == -1) {
+				perror("tkill");
+				exit(EXIT_FAILURE);
+			}
+		}
+		pthread_mutex_unlock(&args->thread_info->mutex);
+	}
+}
+
+static void __create_signal_monitor(int tid, int fd) {
+	pthread_t thread;
+	struct signal_monitor_args *packed_args = malloc(sizeof(struct signal_monitor_args));
+	if (packed_args == NULL) {
+		perror("malloc");
+		exit(EXIT_FAILURE);
+	}
+
+	packed_args->fd = fd;
+	packed_args->tid = tid;
+	packed_args->thread_info = &active_thread_info[my_thread_idx];
+
+	if (pthread_create(&thread, NULL, (void *(*)(void *)) __signal_monitor, (void *)packed_args) != 0) {
+		perror("pthread_create");
+		exit(EXIT_FAILURE);
+	}
+
+	if (pthread_detach(thread) != 0) {
+		perror("pthread_detach");
+		exit(EXIT_FAILURE);
+	}
 }
 
 static int __alt_stack_index(void) {
@@ -110,8 +178,14 @@ void *trampoline_return_address(void) {
 void signal_handler(int signal, siginfo_t *si, void *ptr) {
 	int index = __alt_stack_index();
 
-	if ((index == -1) || !active_thread_info[index].active) {
+	if (index == -1) {
 		__signal_handler_jvm(signal, si, ptr);
+		return;
+	}
+
+	if (!active_thread_info[index].active) {
+		if (signal != SIGALRM)
+			__signal_handler_jvm(signal, si, ptr);
 		return;
 	}
 
@@ -171,6 +245,7 @@ void* maybe_allocate_signal_stack(void) {
 	for (int i = 0; i < THREAD_IDX_MAX; i++) {
 		if (!active_thread_info[i].taken) {
 			active_thread_info[i].taken = true;
+			pthread_mutex_init(&active_thread_info[i].mutex, NULL);
 			my_thread_idx = i;
 			break;
 		}
@@ -184,10 +259,13 @@ void* maybe_allocate_signal_stack(void) {
 		exit(EXIT_FAILURE);
 	}
 
-	if (timer_create(CLOCK_THREAD_CPUTIME_ID, NULL, &my_timer_id) == -1) {
+	if ((my_timer_fd = timerfd_create(CLOCK_REALTIME, NULL)) == -1) {
 		perror("timer_create");
 		exit(EXIT_FAILURE);
 	}
+
+	__timer_disarm();
+	__create_signal_monitor(gettid(), my_timer_fd);
 
 	char debug_file_path[64];
 	sprintf(debug_file_path, "./dbg_thread_%d.txt", my_thread_idx);
@@ -225,26 +303,24 @@ void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 	assert(my_thread_idx <= THREAD_IDX_MAX);
 
 	__save_segment_registers(my_thread_idx);
-	active_thread_info[my_thread_idx].active = true;
 
 	trampoline_entrypoint_t *entrypoint = TRAMPOLINE_ENTRYPOINT(my_thread_idx);
-
 	active_thread_info[my_thread_idx].faulted = false;
 
-	*(uint64_t *) debug_file_address = code_length;
+	*(uint64_t volatile*) debug_file_address = code_length;
 	memcpy(debug_file_address + 8, code, code_length);
+
 	__timer_arm();
    	if (sigsetjmp(active_thread_info[my_thread_idx].jmpbuf, 1) == 0) {
    		entrypoint(code, &output->state);
    		siglongjmp(active_thread_info[my_thread_idx].jmpbuf, 1);
 	}
 	__timer_disarm();
-	*(uint64_t *) debug_file_address = 0;
+
+	*(uint64_t volatile*) debug_file_address = 0;
 
 	output->faulted = active_thread_info[my_thread_idx].faulted;
 	if (output->faulted) {
 		output->fault = active_thread_info[my_thread_idx].fault_details;
 	}
-
-	active_thread_info[my_thread_idx].active = false;
 }

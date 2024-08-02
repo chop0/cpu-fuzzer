@@ -52,6 +52,7 @@ public sealed interface ExecutionResult {
 				case 7 -> new Fault.Sigbus(fault_details.fault_address(faultDetails).address());
 				case 8 -> new Fault.Sigfpe(fault_details.fault_address(faultDetails).address());
 				case 5 -> new Fault.Sigtrap(fault_details.fault_address(faultDetails).address());
+				case 14 -> new Fault.Sigalrm(fault_details.fault_address(faultDetails).address());
 				default -> new Fault.Unknown(fault_details.fault_address(faultDetails).address(), fault_details.fault_reason(faultDetails));
 			};
 		}
@@ -63,6 +64,7 @@ public sealed interface ExecutionResult {
 				case Sigbus _ -> 7;
 				case Sigfpe _ -> 8;
 				case Sigtrap _ -> 5;
+				case Sigalrm _ -> 14;
 				case Unknown unknown -> unknown.reason();
 			};
 
@@ -89,6 +91,13 @@ public sealed interface ExecutionResult {
 			@Override
 			public String toString() {
 				return "Sigill[0x%08x, reason = %s]".formatted(address, reason);
+			}
+		}
+
+		record Sigalrm(long address) implements Fault {
+			@Override
+			public String toString() {
+				return "Sigalrm[0x%08x]".formatted(address);
 			}
 		}
 
