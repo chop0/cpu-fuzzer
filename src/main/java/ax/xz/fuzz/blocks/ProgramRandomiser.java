@@ -1,10 +1,7 @@
 package ax.xz.fuzz.blocks;
 
 import ax.xz.fuzz.instruction.*;
-import ax.xz.fuzz.mutate.DeferredMutation;
-import ax.xz.fuzz.mutate.Mutator;
-import ax.xz.fuzz.mutate.PrefixAdder;
-import ax.xz.fuzz.mutate.PrefixDuplicator;
+import ax.xz.fuzz.mutate.*;
 import ax.xz.fuzz.runtime.Branch;
 import ax.xz.fuzz.runtime.Config;
 import ax.xz.fuzz.runtime.ExecutableSequence;
@@ -27,7 +24,7 @@ public class ProgramRandomiser {
 
 	public static final Mutator[] mutators = {
 		new PrefixAdder(),
-//		new RexAdder(),  // TODO : fix vex adder
+		new RexAdder(),  // TODO : fix vex adder
 //		new VexAdder(),
 		new PrefixDuplicator()
 	};

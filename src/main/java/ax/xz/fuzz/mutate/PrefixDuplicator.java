@@ -8,7 +8,7 @@ import com.github.icedland.iced.x86.Register;
 
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.mutate.Encoding.isPrefix;
+import static ax.xz.fuzz.mutate.Encoding.isLegacyPrefix;
 import static com.github.icedland.iced.x86.Register.*;
 
 public class PrefixDuplicator implements Mutator {
@@ -48,7 +48,7 @@ public class PrefixDuplicator implements Mutator {
 	private static byte[] duplicatePrefix(int duplicationCount, byte[] insnEncoded, byte prefix) {
 		int prefixCount = 0;
 		for (byte b : insnEncoded) {
-			if (isPrefix(b))
+			if (isLegacyPrefix(b))
 				prefixCount++;
 			else
 				break;

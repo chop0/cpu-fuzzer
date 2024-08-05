@@ -1,18 +1,19 @@
 package ax.xz.fuzz.mutate;
 
 import ax.xz.fuzz.instruction.Opcode;
+import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.mutate.Encoding.isPrefix;
+import static ax.xz.fuzz.mutate.Encoding.isLegacyPrefix;
 
 public class RexAdder implements Mutator {
 	@Override
 	public boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction) {
-		return false;
+		return Encoding.touches(instruction, RegisterSet.GPQ) || Encoding.usesVexEvex(instruction); // only add if there's already a rex that'll take precedence
 	}
 
 	@Override
@@ -22,15 +23,7 @@ public class RexAdder implements Mutator {
 
 	@Override
 	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction) {
-		byte bitsDisableMask = 0b0101;
-		if (Encoding.hasImmediate(instruction))
-			bitsDisableMask |= 0b1000; // can fuck up length decoding
-		if (Encoding.hasSIBIndex(instruction) || instruction.hasOpKind(OpKind.MEMORY))
-			bitsDisableMask |= 0b0010;
-		if (Encoding.hasSIBBase(instruction))
-			bitsDisableMask |= 0b0001;
-
-		return new RexMutation((byte) ((0x40 | (byte) rng.nextInt(0x10)) & ~(bitsDisableMask)));
+		return new RexMutation((byte) ((0x40 | (byte) rng.nextInt(0x10))));
 	}
 
 	private record RexMutation(byte rex) implements DeferredMutation {
@@ -39,7 +32,7 @@ public class RexAdder implements Mutator {
 			// find end of prefixes
 			int targetPosition = 0;
 			for (byte b : insnEncoded) {
-				if (isPrefix(b))
+				if (isLegacyPrefix(b))
 					targetPosition++;
 				else
 					break;

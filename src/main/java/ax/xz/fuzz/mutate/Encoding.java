@@ -1,5 +1,6 @@
 package ax.xz.fuzz.mutate;
 
+import ax.xz.fuzz.instruction.RegisterSet;
 import com.github.icedland.iced.x86.EncodingKind;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
@@ -21,7 +22,7 @@ public class Encoding {
 	}
 
 
-	static boolean isPrefix(byte b) {
+	static boolean isLegacyPrefix(byte b) {
 		for (var prefix : PREFIXES) {
 			if (b == prefix)
 				return true;
@@ -41,17 +42,21 @@ public class Encoding {
 		return false;
 	}
 
-	static boolean touchesLegacyHigh(Instruction instruction) {
+	static boolean touches(Instruction instruction, RegisterSet set) {
 		for (int i = 0; i < instruction.getOpCount(); i++) {
 			int opkind = instruction.getOpKind(i);
 			if (opkind == OpKind.REGISTER) {
 				int register = instruction.getOpRegister(i);
-				if (LEGACY_HIGH_GP.hasRegister(register))
+				if (set.hasRegister(register))
 					return true;
 			}
 		}
 
 		return false;
+	}
+
+	static boolean usesVexEvex(Instruction instruction) {
+		return instruction.getOpCode().getEncoding() == EncodingKind.VEX || instruction.getOpCode().getEncoding() == EncodingKind.EVEX;
 	}
 
 	static boolean hasSIBIndex(Instruction instruction) {

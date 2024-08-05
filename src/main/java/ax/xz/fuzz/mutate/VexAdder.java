@@ -7,7 +7,7 @@ import com.github.icedland.iced.x86.Instruction;
 
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.mutate.Encoding.isPrefix;
+import static ax.xz.fuzz.mutate.Encoding.isLegacyPrefix;
 
 public class VexAdder implements Mutator {
 
@@ -41,7 +41,7 @@ public class VexAdder implements Mutator {
 			// find end of prefixes
 			int targetPosition = 0;
 			for (byte b : insnEncoded) {
-				if (isPrefix(b))
+				if (isLegacyPrefix(b))
 					targetPosition++;
 				else
 					break;

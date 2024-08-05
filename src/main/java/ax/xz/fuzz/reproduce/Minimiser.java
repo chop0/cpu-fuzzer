@@ -116,17 +116,6 @@ public class Minimiser {
 		return false;
 	}
 
-	private static byte[][] removeInstruction(byte[][] original, byte[] instruction) {
-		var newInstructions = new byte[original.length - 1][];
-		int j = 0;
-		for (byte[] instr : original) {
-			if (!Arrays.equals(instr, instruction)) {
-				newInstructions[j++] = instr;
-			}
-		}
-		return newInstructions;
-	}
-
 	private boolean simplifyRegistersOnce(TestCase tc) {
 		if (simplifyGprsOnce(tc)) {
 			return true;
