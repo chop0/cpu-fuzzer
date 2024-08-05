@@ -68,7 +68,7 @@ public sealed interface BlockEntry permits BlockEntry.ConcreteEntry, BlockEntry.
 			var instructionAssembler = inner.assembler.get();
 
 			try {
-				byte[] result = new byte[15];
+				byte[] result = new byte[32];
 				var buf = ByteBuffer.wrap(result);
 				instructionAssembler.reset();
 				instructionAssembler.addInstruction(instruction);

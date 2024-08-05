@@ -158,8 +158,11 @@ public class Minimiser {
 			return;
 		}
 		visited.add(currentIndex);
-		findVisitedBranches(branches, branches[currentIndex].takenIndex(), visited);
-		findVisitedBranches(branches, branches[currentIndex].notTakenIndex(), visited);
+
+		if (currentIndex < branches.length) {
+			findVisitedBranches(branches, branches[currentIndex].takenIndex(), visited);
+			findVisitedBranches(branches, branches[currentIndex].notTakenIndex(), visited);
+		}
 	}
 
 	private TestCase pruneUnusedBlocks0(TestCase tc) {
@@ -195,8 +198,11 @@ public class Minimiser {
 		for (int i = 0; i < tc.branches().length; i++) {
 			if (visited.contains(i)) {
 				var branch = tc.branches()[i];
-				var newTaken = newBlocksA.indexOf(originalBlockLocationsA.get(branch.takenIndex()));
-				var newNotTaken = newBlocksA.indexOf(originalBlockLocationsA.get(branch.notTakenIndex()));
+				int takenIndex = branch.takenIndex();
+				int notTakenIndex = branch.notTakenIndex();
+
+				var newTaken = takenIndex == blocksA.length ? newBlocksA.size() : newBlocksA.indexOf(originalBlockLocationsA.get(takenIndex));
+				var newNotTaken = notTakenIndex == blocksA.length ? newBlocksA.size() : newBlocksA.indexOf(originalBlockLocationsA.get(notTakenIndex));
 				newBranches.add(new Branch(branch.type(), newTaken, newNotTaken));
 			}
 		}

@@ -32,13 +32,10 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		STOSB_M8_AL, STOSD_M32_EAX, STOSW_M16_AX, STOSQ_M64_RAX,
 		SCASB_AL_M8, SCASW_AX_M16, SCASD_EAX_M32, SCASQ_RAX_M64,
 		LODSB_AL_M8, LODSW_AX_M16, LODSD_EAX_M32, LODSQ_RAX_M64,
-		MOVSB_M8_M8, MOVSW_M16_M16, MOVSD_M32_M32, MOVSQ_M64_M64,
-		CMPSB_M8_M8, CMPSD_M32_M32, CMPSW_M16_M16, CMPSQ_M64_M64,
 		INCSSPD_R32, INCSSPQ_R64, RDSSPD_R32, RDSSPQ_R64, RSTORSSP_M64, SAVEPREVSSP, SETSSBSY,
 		WRSSD_M32_R32, WRSSQ_M64_R64, WRUSSD_M32_R32, WRUSSQ_M64_R64,
 		XSAVE_MEM, XSAVES_MEM, XSAVEC_MEM, XSAVE64_MEM, XSAVEC64_MEM, XSAVES64_MEM,
 		LSL_R16_RM16, LSL_R32_R32M16, LSL_R64_R64M16,
-		CLZEROD, CLZEROW, CLZEROQ,
 		CLUI, STUI,
 		XGETBV,
 		RDPKRU, WRPKRU,
@@ -166,6 +163,10 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 			)) };
 			Branch[] branches = { new Branch(ExecutableSequence.BranchType.JA, 1, 1)};
 			var result = executor.runSequence(CPUState.filledWith(scratch.address()), new ExecutableSequence(blocks, branches)).result();
+
+			if (result instanceof ExecutionResult.Fault.Sigill)
+				System.out.println("Eliminated instruction due to sigill: " + opcode.icedFieldName());
+
 			return !(result instanceof ExecutionResult.Fault.Sigill);
 		} catch (RuntimeException e) {
 			if (e.getCause() instanceof Block.UnencodeableException)

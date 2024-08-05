@@ -6,8 +6,6 @@ import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 import com.github.icedland.iced.x86.Register;
 
-import static ax.xz.fuzz.instruction.RegisterSet.LEGACY_HIGH_GP;
-
 public class Encoding {
 	private static final byte[] PREFIX_GROUP_1 = {(byte) 0xF0, (byte) 0xF2, (byte) 0xF3};
 	private static final byte[] PREFIX_GROUP_2 = {(byte) 0x2E, (byte) 0x36, (byte) 0x3E, (byte) 0x26, (byte) 0x64, (byte) 0x65};
