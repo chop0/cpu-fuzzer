@@ -1,11 +1,9 @@
 package ax.xz.fuzz.mutate;
 
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.Operand;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
-import com.github.icedland.iced.x86.info.OpCodeTableKind;
 
 import java.util.random.RandomGenerator;
 
@@ -31,15 +29,6 @@ public class VexAdder implements Mutator {
 	@Override
 	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction) {
 		return new VexMutation((byte) rng.nextInt(), (byte) rng.nextInt(), rng.nextBoolean(), rng.nextBoolean());
-	}
-
-	@Override
-	public void reverse(ReverseRandomGenerator rng, ResourcePartition rp, Instruction instruction, DeferredMutation outcome) {
-		var mutation = (VexMutation) outcome;
-		rng.pushInt(mutation.vex1);
-		rng.pushInt(mutation.vex2);
-		rng.pushBoolean(mutation.hasVex2);
-		rng.pushBoolean(mutation.enable);
 	}
 
 	private static record VexMutation(byte vex1, byte vex2, boolean hasVex2, boolean enable) implements DeferredMutation {

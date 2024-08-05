@@ -1,9 +1,6 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.blocks.BasicBlock;
-import ax.xz.fuzz.blocks.Block;
-import ax.xz.fuzz.instruction.RegisterSet;
-import ax.xz.fuzz.instruction.StatusFlag;
+import ax.xz.fuzz.blocks.*;
 import ax.xz.fuzz.runtime.state.CPUState;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,6 +20,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
@@ -35,35 +33,30 @@ public record RecordedTestCase(
 	@JsonDeserialize(converter = TestCaseDeserializer.class)
 	@JsonSerialize(converter = InstructionSerializer.class)
 	@JacksonXmlElementWrapper(useWrapping = false)
-	byte[][][] code1,
+	Block[] code1,
 	@JsonDeserialize(converter = TestCaseDeserializer.class)
 	@JsonSerialize(converter = InstructionSerializer.class)
 	@JacksonXmlElementWrapper(useWrapping = false)
-	byte[][][] code2,
+	Block[] code2,
 	long codeLocation,
 	Branch[] branches,
 	SerialisedRegion... memory
-) {
+) implements TestCase {
 	public RecordedTestCase {
 		if (code1 == null) {
-			code1 = new byte[0][][];
+			code1 = new Block[0];
 		}
 		if (code2 == null) {
-			code2 = new byte[0][][];
+			code2 = new Block[0];
 		}
 	}
 
 	public Block[] blocksA() {
-		return Arrays.stream(code1).map(BasicBlock::ofEncoded).toArray(Block[]::new);
+		return code1;
 	}
 
 	public Block[] blocksB() {
-		return Arrays.stream(code2).map(BasicBlock::ofEncoded).toArray(Block[]::new);
-	}
-
-	public long encodedSize() {
-		return Arrays.stream(code1).flatMap(Arrays::stream).mapToInt(b -> b.length).sum() +
-		       Arrays.stream(code2).flatMap(b -> Arrays.stream(b)).mapToInt(b -> b.length).sum();
+		return code2;
 	}
 
 	public String toXML() {
@@ -85,9 +78,9 @@ public record RecordedTestCase(
 		}
 	}
 
-	public static class TestCaseDeserializer extends StdConverter<JsonNode, byte[][][]> {
+	public static class TestCaseDeserializer extends StdConverter<JsonNode, Block[]> {
 		@Override
-		public byte[][][] convert(JsonNode value) {
+		public Block[] convert(JsonNode value) {
 			var bks = value.elements().next().get("block");
 			if (bks.isArray()) {
 				var iter = bks.elements();
@@ -95,7 +88,7 @@ public record RecordedTestCase(
 				while (iter.hasNext()) {
 					blocks.add(iter.next());
 				}
-				var result = new byte[blocks.size()][][];
+				var result = new Block[blocks.size()];
 
 				for (int i = 0; i < blocks.size(); i++) {
 					result[i] = deserializeBlock(blocks.get(i));
@@ -103,26 +96,28 @@ public record RecordedTestCase(
 
 				return result;
 			} else {
-				return new byte[][][]{deserializeBlock(bks)};
+				return new Block[]{deserializeBlock(bks)};
 			}
 		}
 
-		private byte[][] deserializeBlock(JsonNode n) {
+		private Block deserializeBlock(JsonNode n) {
 			var instructions = n.get("instruction");
 			if (instructions == null) {
-				return new byte[0][];
+				return new BasicBlock(List.of());
 			}
 
 			if (instructions.isArray()) {
-				var result = new byte[instructions.size()][];
+				var result = new ArrayList<BlockEntry>(instructions.size());
+
 				for (int i = 0; i < instructions.size(); i++) {
-					result[i] = deserializeInstruction(instructions.get(i));
+					result.add(new BlockEntry.ConcreteEntry(deserializeInstruction(instructions.get(i))));
 				}
-				return result;
+
+				return new BasicBlock(result);
 			} else if (!instructions.isEmpty()) {
-				return new byte[][]{deserializeInstruction(instructions)};
+				return new BasicBlock(List.of(new BlockEntry.ConcreteEntry(deserializeInstruction(instructions))));
 			} else {
-				return new byte[0][];
+				return new BasicBlock(List.of());
 			}
 
 		}
@@ -139,28 +134,34 @@ public record RecordedTestCase(
 		}
 	}
 
-	public static class InstructionSerializer extends StdConverter<byte[][][], JsonNode> {
+	public static class InstructionSerializer extends StdConverter<Block[], JsonNode> {
 		@Override
-		public JsonNode convert(byte[][][] c) {
+		public JsonNode convert(Block[] c) {
 			var node = JsonNodeFactory.instance.objectNode();
 			var blocks = node.putArray("block");
 
-			for (byte[][] value : c) {
-				var block = blocks.addObject();
-				var instructions = block.putArray("instruction");
+			try {
+				for (var value : c) {
+					var block = blocks.addObject();
+					var instructions = block.putArray("instruction");
 
 
-				for (int i = 0; i < value.length; i++) {
-					var insn = instructions.addObject();
-					insn.put("mnemonic", disassemble(value[i]));
+					for (var item : value.items()) {
+						var bytes = item.encode(0);
+						var insn = instructions.addObject();
+						insn.put("mnemonic", disassemble(bytes));
 
-					StringBuilder code = new StringBuilder();
-					for (var b : value[i]) {
-						code.append(String.format("%02x ", b));
+						StringBuilder code = new StringBuilder();
+						for (var b : bytes) {
+							code.append(String.format("%02x ", b));
+						}
+						insn.put("code", code.toString());
 					}
-					insn.put("code", code.toString());
 				}
+			} catch (Exception e) {
+				throw new RuntimeException(e);
 			}
+
 			return node;
 		}
 	}

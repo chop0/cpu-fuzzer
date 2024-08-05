@@ -1,6 +1,5 @@
 package ax.xz.fuzz.mutate;
 
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
@@ -32,12 +31,6 @@ public class RexAdder implements Mutator {
 			bitsDisableMask |= 0b0001;
 
 		return new RexMutation((byte) ((0x40 | (byte) rng.nextInt(0x10)) & ~(bitsDisableMask)));
-	}
-
-	@Override
-	public void reverse(ReverseRandomGenerator rng, ResourcePartition rp, Instruction instruction, DeferredMutation outcome) {
-		var mutation = (RexMutation) outcome;
-		rng.pushInt(mutation.rex & 0b1111);
 	}
 
 	private record RexMutation(byte rex) implements DeferredMutation {

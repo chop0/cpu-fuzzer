@@ -1,5 +1,6 @@
 package ax.xz.fuzz.runtime;
 
+import ax.xz.fuzz.blocks.BasicBlock;
 import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.instruction.RegisterSet;
@@ -12,6 +13,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.zip.DataFormatException;
 
+import static ax.xz.fuzz.runtime.ExecutionResult.interestingMismatch;
 import static ax.xz.fuzz.runtime.RecordedTestCase.*;
 
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
@@ -62,6 +64,23 @@ public class SequenceExecutor {
 		return new SequenceResult(codeSlice, result);
 	}
 
+	public boolean lookForMismatch(TestCase tc, int attempts) {
+		var seqA = new ExecutableSequence(tc.blocksA(), tc.branches());
+		var seqB = new ExecutableSequence(tc.blocksB(), tc.branches());
+
+		ExecutionResult lastResult = runSequence(tc.initialState(), seqA).result();
+
+		for (int i = 0; i < attempts; i++) {
+			var result2 = runSequence(tc.initialState(), seqB).result();
+
+			if (interestingMismatch(lastResult, result2)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private ExecutionResult runBlock(CPUState startState, MemorySegment code) {
 		for (int i = 0; i < resettableMemory.length; i++) {
 			var segment = resettableMemory[i];
@@ -89,11 +108,7 @@ public class SequenceExecutor {
 			serializedRegion[i] = SerialisedRegion.ofRegion(resettableMemory[i]);
 		}
 
-		try {
-			return new RecordedTestCase(tc.initialState(), encodeRelevantInstructions(tc.a()), encodeRelevantInstructions(tc.b()),  code.address(), tc.branches(), serializedRegion);
-		} catch (Block.UnencodeableException e) {
-			throw new RuntimeException(e);
-		}
+		return new RecordedTestCase(tc.initialState(), tc.a().blocks(), tc.b().blocks(),  code.address(), tc.branches(), serializedRegion);
 	}
 
 	public RegisterSet legallyModifiableRegisters() {
@@ -109,24 +124,8 @@ public class SequenceExecutor {
 	}
 
 	private MemorySegment encode(ExecutableSequence sequence) throws Block.UnencodeableException {
-		int codeLength = sequence.encode(code, config);
+		int codeLength = sequence.encode(code, config, trampoline_return_address().address());
 		return code.asSlice(0, codeLength);
-	}
-
-	private byte[][][] encodeRelevantInstructions(ExecutableSequence seq) throws Block.UnencodeableException {
-		var result = new byte[seq.blocks().length][][];
-		Block[] blocks = seq.blocks();
-		for (int i = 0; i < blocks.length; i++) {
-			var block = blocks[i];
-			result[i] = new byte[block.size()][];
-
-			int j = 0;
-			for (var item : block.items()) {
-				result[i][j++] = item.encode(0);
-			}
-		}
-
-		return result;
 	}
 
 	public static SequenceExecutor create(Config config) {

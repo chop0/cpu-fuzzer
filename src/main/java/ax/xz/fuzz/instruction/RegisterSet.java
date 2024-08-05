@@ -1,8 +1,5 @@
 package ax.xz.fuzz.instruction;
 
-
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
-
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Iterator;
@@ -178,18 +175,6 @@ public final class RegisterSet implements Iterable<Integer> {
 		}
 
 		return currentIndex;
-	}
-
-	public void reverse(ReverseRandomGenerator random, int outcome) {
-		int currentIndex = registers.nextSetBit(0);
-		int bound = 0;
-
-		while (currentIndex != outcome) {
-			currentIndex = registers.nextSetBit(currentIndex + 1);
-			bound++;
-		}
-
-		random.pushInt(bound);
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {

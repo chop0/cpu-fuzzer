@@ -1,7 +1,6 @@
 package ax.xz.fuzz.instruction;
 
 import ax.xz.fuzz.blocks.NoPossibilitiesException;
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.runtime.Architecture;
 
 import java.lang.foreign.MemorySegment;
@@ -22,10 +21,6 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 		return memory.selectSegment(random, requiredSize, alignment, addressWidthBytes);
 	}
 
-	public void reverseAddress(ReverseRandomGenerator random, int requiredSize, int alignment, int addressWidthBytes, long outcome) throws NoPossibilitiesException {
-		memory.reverseSegment(random, requiredSize, alignment, addressWidthBytes, outcome);
-	}
-
 	public int selectRegister(RegisterSet desiredResources, RandomGenerator random) throws NoPossibilitiesException {
 		var intersection = allowedRegisters.intersection(desiredResources);
 
@@ -33,15 +28,6 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 			throw new NoPossibilitiesException();
 
 		return intersection.select(random);
-	}
-
-	public void reverseRegister(RegisterSet desiredResources, ReverseRandomGenerator random, int outcome) throws NoPossibilitiesException {
-		var intersection = allowedRegisters.intersection(desiredResources);
-
-		if (intersection.isEmpty())
-			throw new NoPossibilitiesException();
-
-		intersection.reverse(random, outcome);
 	}
 
 	public boolean canFulfil(int requiredSize, int alignment, int addressWidthBytes) {

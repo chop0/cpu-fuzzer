@@ -1,7 +1,6 @@
 package ax.xz.fuzz.instruction;
 
 import ax.xz.fuzz.blocks.NoPossibilitiesException;
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.parse.OperandLexer;
 import ax.xz.fuzz.parse.OperandParser;
 import ax.xz.fuzz.runtime.Architecture;
@@ -141,37 +140,6 @@ public record Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnem
 //		}
 
 		return insn;
-	}
-
-	public void reverse(ReverseRandomGenerator rng, ResourcePartition resourcePartition, Instruction insn) throws NoPossibilitiesException {
-		int explicitOpIdx = 0;
-		for (var operand : operands) {
-			int operandIndex = -1;
-			if (operand.counted()) {
-				operandIndex = explicitOpIdx++;
-			}
-			operand.reverse(rng, insn, operandIndex, resourcePartition);
-		}
-
-//		insn.setRepePrefix(rng.nextInt(30) == 0);
-//		insn.setRepnePrefix(rng.nextInt(30) == 0);
-//		insn.setRepPrefix(rng.nextInt(30) == 0);
-//		insn.setLockPrefix(rng.nextInt(30) == 0);
-
-		if (insn.hasSegmentPrefix()) {
-			rng.pushInt(0);
-			RegisterSet.SEGMENT.reverse(rng, insn.getSegmentPrefix());
-		} else {
-			rng.pushInt(1);
-		}
-
-//		if ( rng.nextBoolean()) {
-//			switch (rng.nextInt(3)) {
-//				case 0 -> insn.setRepnePrefix(true);
-//				case 1 -> insn.setRepePrefix(true);
-//				case 2 -> insn.setRepPrefix(true);
-//			}
-//		}
 	}
 
 	public boolean fulfilledBy(boolean evex, ResourcePartition rp) {

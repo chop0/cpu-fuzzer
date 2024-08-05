@@ -18,27 +18,14 @@ public record BasicBlock(List<BlockEntry> items) implements Block {
 	}
 
 	@Override
-	public Block without(int... instructionIndex) {
-		var newItems = new ArrayList<BlockEntry>();
-		for (int i = 0; i < items.size(); i++) {
-			int finalI = i;
-			if (Arrays.stream(instructionIndex).noneMatch(j -> j == finalI)) {
-				newItems.add(items.get(i));
-			}
-		}
+	public Block without(int index) {
+		var newItems = new ArrayList<>(items);
+		newItems.remove(index);
 		return new BasicBlock(newItems);
 	}
 
 	@Override
-	public boolean equals(Object obj) {
-		if (obj == this) return true;
-		if (obj == null || obj.getClass() != this.getClass()) return false;
-		var that = (Block) obj;
-		return Objects.equals(this.items, that.items());
-	}
-
-	@Override
-	public int hashCode() {
-		return items.hashCode();
+	public int indexOf(BlockEntry entry) {
+		return items.indexOf(entry);
 	}
 }

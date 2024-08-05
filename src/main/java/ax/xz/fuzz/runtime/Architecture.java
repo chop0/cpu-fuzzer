@@ -36,7 +36,7 @@ public class Architecture {
 			var arr = new byte[buf.remaining()];
 			buf.get(arr);
 
-			Block[] blocks = { new BasicBlock(List.of(new BlockEntry.ConcreteEntry(arr))) };
+			BasicBlock[] blocks = { new BasicBlock(List.of(new BlockEntry.ConcreteEntry(arr))) };
 			Branch[] branches = { new Branch(ExecutableSequence.BranchType.JA, 1, 1)};
 			var result = executor.runSequence(CPUState.filledWith(scratch.address()), new ExecutableSequence(blocks, branches)).result();
 			supportsEvex = result instanceof ExecutionResult.Success;

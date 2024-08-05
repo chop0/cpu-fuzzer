@@ -17,9 +17,10 @@ module ax.xz.fuzz {
 
 	opens ax.xz.fuzz.blocks to com.fasterxml.jackson.databind;
 	opens ax.xz.fuzz.instruction to com.fasterxml.jackson.databind;
-	opens ax.xz.fuzz.blocks.randomisers to com.fasterxml.jackson.databind;
-	opens ax.xz.fuzz.runtime to com.fasterxml.jackson.databind, info.picocli;
-	opens ax.xz.fuzz to com.fasterxml.jackson.databind;
+	opens ax.xz.fuzz.runtime to com.fasterxml.jackson.databind;
 	opens ax.xz.fuzz.metrics to com.fasterxml.jackson.databind;
-	opens ax.xz.fuzz.runtime.state to com.fasterxml.jackson.databind, info.picocli;
+	opens ax.xz.fuzz.runtime.state to com.fasterxml.jackson.databind;
+
+	exports ax.xz.fuzz to info.picocli;
+	opens ax.xz.fuzz.reproduce to com.fasterxml.jackson.databind;
 }

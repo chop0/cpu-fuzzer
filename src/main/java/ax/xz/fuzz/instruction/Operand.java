@@ -1,7 +1,6 @@
 package ax.xz.fuzz.instruction;
 
 import ax.xz.fuzz.blocks.NoPossibilitiesException;
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 
@@ -16,8 +15,6 @@ public sealed interface Operand {
 	boolean counted();
 
 	void select(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException;
-
-	void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException;
 
 	record RmOperand(RegisterSet possibleRegisters, int bitSizeMem, int bitSizeBroadcast, boolean counted,
 			 boolean isMask) implements Operand {
@@ -85,22 +82,6 @@ public sealed interface Operand {
 		}
 
 		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-			if (instruction.getOpKind(operandIndex) == OpKind.REGISTER) {
-				random.pushInt(0);
-				rp.reverseRegister(possibleRegisters, random, instruction.getOpRegister(operandIndex));
-			} else if (instruction.getOpKind(operandIndex) == OpKind.MEMORY) {
-				if (instruction.getBroadcast()) {
-					random.pushInt(2);
-					rp.reverseAddress(random, byteSizeBroadcast(), byteAlignBroadcast(), 4, instruction.getMemoryDisplacement64());
-				} else {
-					random.pushInt(1);
-					rp.reverseAddress(random, byteSizeMem(), byteAlignMem(), 4, instruction.getMemoryDisplacement64());
-				}
-			}
-		}
-
-		@Override
 		public boolean fulfilledBy(ResourcePartition partition) {
 			return partition.allowedRegisters().intersects(possibleRegisters())
 			       || partition.canFulfil(byteSizeMem(), byteAlignMem(), 4)
@@ -163,11 +144,6 @@ public sealed interface Operand {
 		}
 
 		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-			random.pushLong(instruction.getImmediate(operandIndex) << (64 - bitSize));
-		}
-
-		@Override
 		public boolean fulfilledBy(ResourcePartition partition) {
 			return true;
 		}
@@ -192,11 +168,6 @@ public sealed interface Operand {
 		}
 
 		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-			intersection(rp).reverse(random, instruction.getOpRegister(operandIndex));
-		}
-
-		@Override
 		public boolean fulfilledBy(ResourcePartition partition) {
 			return !intersection(partition).isEmpty();
 		}
@@ -211,11 +182,6 @@ public sealed interface Operand {
 	record VSIB(int indexWidth, RegisterSet possibleRegisters) implements Operand {
 		@Override
 		public void select(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-		}
-
-		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-
 		}
 
 		@Override
@@ -234,11 +200,6 @@ public sealed interface Operand {
 		@Override
 		public void select(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
 			// todo: do this
-		}
-
-		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-
 		}
 
 		@Override
@@ -270,10 +231,6 @@ public sealed interface Operand {
 
 		}
 
-		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-
-		}
 	}
 
 	record AncillaryFlags(AncillaryFlag flag) implements Operand {
@@ -293,15 +250,6 @@ public sealed interface Operand {
 				case ZEROING -> instruction.setZeroingMasking(random.nextBoolean());
 				case SAE -> instruction.setSuppressAllExceptions(random.nextBoolean());
 				case EMBEDDED_ROUNDING_CONTROL -> instruction.setRoundingControl(random.nextInt(5));
-			}
-		}
-
-		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-			switch (flag) {
-				case ZEROING -> random.pushBoolean(instruction.getZeroingMasking());
-				case SAE -> random.pushBoolean(instruction.getSuppressAllExceptions());
-				case EMBEDDED_ROUNDING_CONTROL -> random.pushInt(instruction.getRoundingControl());
 			}
 		}
 
@@ -333,11 +281,6 @@ public sealed interface Operand {
 		}
 
 		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-			// do nothing
-		}
-
-		@Override
 		public boolean fulfilledBy(ResourcePartition partition) {
 			return true;
 		}
@@ -357,10 +300,6 @@ public sealed interface Operand {
 			instruction.setMemoryDisplacement32(random.nextInt());
 		}
 
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-			random.pushInt(instruction.getMemoryDisplacement32());
-		}
-
 		@Override
 		public boolean fulfilledBy(ResourcePartition partition) {
 			return false; // todo: figure this out
@@ -376,11 +315,6 @@ public sealed interface Operand {
 	record ImplicitReg(int register) implements Operand {
 		@Override
 		public void select(RandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
-
-		}
-
-		@Override
-		public void reverse(ReverseRandomGenerator random, Instruction instruction, int operandIndex, ResourcePartition rp) throws NoPossibilitiesException {
 
 		}
 

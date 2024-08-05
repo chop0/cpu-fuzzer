@@ -1,6 +1,5 @@
 package ax.xz.fuzz.mutate;
 
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
@@ -44,17 +43,6 @@ public class PrefixDuplicator implements Mutator {
 			instruction.getLockPrefix() ? rng.nextInt(2) : 0,
 			instruction.getSegmentPrefix() != Register.NONE ? rng.nextInt(2) : 0,
 			rng.nextInt(2));
-	}
-
-	@Override
-	public void reverse(ReverseRandomGenerator rng, ResourcePartition rp, Instruction instruction, DeferredMutation outcome) {
-		var mutation = (PrefixDupeMutation) outcome;
-		if (instruction.getRepePrefix()) rng.pushInt(mutation.repeDuplicationCount);
-		if (instruction.getRepnePrefix()) rng.pushInt(mutation.repneDuplicationCount);
-		if (instruction.getRepPrefix()) rng.pushInt(mutation.repDuplicationCount);
-		if (instruction.getLockPrefix()) rng.pushInt(mutation.lockDuplicationCount);
-		if (instruction.getSegmentPrefix() != Register.NONE) rng.pushInt(mutation.segmentDuplicationCount);
-		rng.pushInt(mutation.rexDuplicationCount);
 	}
 
 	private static byte[] duplicatePrefix(int duplicationCount, byte[] insnEncoded, byte prefix) {

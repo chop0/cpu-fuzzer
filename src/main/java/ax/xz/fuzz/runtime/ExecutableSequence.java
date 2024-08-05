@@ -2,21 +2,16 @@ package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.blocks.Block;
 import com.github.icedland.iced.x86.ICRegister;
-import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.asm.AsmRegister64;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeAssemblerResult;
 import com.github.icedland.iced.x86.asm.CodeLabel;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.BiConsumer;
-import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.tester.slave_h.trampoline_return_address;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 public final class ExecutableSequence {
@@ -38,7 +33,7 @@ public final class ExecutableSequence {
 		System.arraycopy(branches, 0, this.branches, 0, branches.length);
 	}
 
-	public int encode(MemorySegment code, Config config) throws Block.UnencodeableException {
+	public int encode(MemorySegment code, Config config, long returnAddress) throws Block.UnencodeableException {
 		int counterRegister = config.counterRegister();
 		int counterBound = config.branchLimit();
 
@@ -78,7 +73,7 @@ public final class ExecutableSequence {
 		}
 
 		blockAssembler.label(exit);
-		blockAssembler.jmp(trampoline_return_address().address());
+		blockAssembler.jmp(returnAddress);
 
 		var bb = code.asByteBuffer();
 		int initialPosition = bb.position();
@@ -103,7 +98,8 @@ public final class ExecutableSequence {
 		JLE(CodeAssembler::jle),
 		JG(CodeAssembler::jg),
 		JP(CodeAssembler::jp),
-		JNP(CodeAssembler::jnp);
+		JNP(CodeAssembler::jnp),
+		JMP(CodeAssembler::jmp);
 		public final BiConsumer<CodeAssembler, CodeLabel> perform;
 
 		BranchType(BiConsumer<CodeAssembler, CodeLabel> perform) {

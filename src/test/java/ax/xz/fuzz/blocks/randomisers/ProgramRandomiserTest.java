@@ -8,7 +8,7 @@
 //import java.lang.foreign.Arena;
 //import java.util.Random;
 //
-//import static ax.xz.fuzz.blocks.randomisers.ProgramRandomiser.MEMORY_GRANULARITY;
+//import static ax.xz.fuzz.blocks.ProgramRandomiser.MEMORY_GRANULARITY;
 //import static org.junit.jupiter.api.Assertions.*;
 //
 //class ProgramRandomiserTest {

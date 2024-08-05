@@ -8,28 +8,59 @@ import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.enc.EncoderException;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collection;
 
-public sealed interface BlockEntry {
+public sealed interface BlockEntry permits BlockEntry.ConcreteEntry, BlockEntry.FuzzEntry, InterleavedBlock.InterleavedEntry {
+	byte[] encode(long rip) throws Block.UnencodeableException;
+
 	static BlockEntry nop1() {
 		return new ConcreteEntry(new byte[]{(byte) 0x90});
 	}
+
 	static BlockEntry nop3() {
 		return new ConcreteEntry(new byte[]{(byte) 0x0f, (byte) 0x1f, (byte) 0x00});
 	}
 
-	byte[] encode(long rip) throws Block.UnencodeableException;
-
 	record ConcreteEntry(byte[] code) implements BlockEntry {
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (!(o instanceof BlockEntry that)) return false;
+
+			try {
+				return Arrays.equals(encode(0), that.encode(0));
+			} catch (Block.UnencodeableException e) {
+				throw new RuntimeException(e);
+			}
+		}
 
 		@Override
 		public byte[] encode(long rip) {
 			return code;
 		}
+
+		@Override
+		public int hashCode() {
+			return Arrays.hashCode(code);
+		}
 	}
 
 	record FuzzEntry(ResourcePartition partition, Opcode opcode, Instruction instruction,
-					 Collection<DeferredMutation> mutations) implements BlockEntry {
+			 Collection<DeferredMutation> mutations) implements BlockEntry {
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (!(o instanceof BlockEntry that)) return false;
+
+			try {
+				return Arrays.equals(encode(0), that.encode(0));
+			} catch (Block.UnencodeableException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
 		public byte[] encode(long rip) throws Block.UnencodeableException {
 			class inner {
 				private static final ThreadLocal<CodeAssembler> assembler = ThreadLocal.withInitial(() -> new CodeAssembler(64));

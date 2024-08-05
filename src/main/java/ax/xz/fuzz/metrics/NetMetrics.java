@@ -29,15 +29,8 @@ public class NetMetrics implements AutoCloseable {
 
 	private final HttpServer server;
 
-	public NetMetrics() {
-		HttpServer server1;
-		try {
-			server1 = HttpServer.create(new InetSocketAddress(9100), 10);
-		} catch (IOException e) {
-			new IOException("Failed to create server", e).printStackTrace();
-			server1 = null;
-		}
-		this.server = server1;
+	public NetMetrics(InetSocketAddress address) throws IOException {
+		this.server = HttpServer.create(address, 10);
 	}
 
 	public NetMetrics startServer() {

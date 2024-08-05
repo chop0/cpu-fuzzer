@@ -12,7 +12,7 @@ public sealed interface ExecutionResult {
 		if (a instanceof Success A && b instanceof Success B) {
 			return (!A.state().gprs().equals(B.state().gprs())
 			       || !A.state().zmm().equals(B.state().zmm())
-			       || !A.state().mmx().equals(B.state().mmx())) && A.state.gprs().values()[14] == B.state.gprs().values()[14];
+			       || !A.state().mmx().equals(B.state().mmx()));
 		}
 
 		return false;

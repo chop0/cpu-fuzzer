@@ -1,18 +1,14 @@
 package ax.xz.fuzz.instruction;
 
 import ax.xz.fuzz.blocks.NoPossibilitiesException;
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Objects;
 import java.util.random.RandomGenerator;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import static ax.xz.fuzz.blocks.randomisers.ProgramRandomiser.MEMORY_GRANULARITY;
+import static ax.xz.fuzz.blocks.ProgramRandomiser.MEMORY_GRANULARITY;
 import static ax.xz.fuzz.runtime.MemoryUtils.*;
 import static java.lang.foreign.MemoryLayout.sequenceLayout;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
@@ -98,21 +94,8 @@ public final record MemoryPartition(MemorySegment ms) {
 			throw new IllegalArgumentException();
 
 
-		long index = r.nextLong(byteSize() / align) * align;
+		long index = r.nextLong(4) * align;
 		return ms.address() + index;
-	}
-
-	public void reverseSegment(ReverseRandomGenerator random, int requiredSize, int alignment, int addressWidthBytes, long outcome) throws NoPossibilitiesException {
-		if (requiredSize == 0) requiredSize = 1;
-
-		if (addressWidthBytes < 4 || requiredSize > MEMORY_GRANULARITY)
-			throw new IllegalArgumentException();
-
-		if (!contains(outcome, requiredSize))
-			throw new NoPossibilitiesException();
-
-		long index = (outcome - ms.address()) / alignment;
-		random.pushLong(index);
 	}
 
 	public Stream<MemorySegment> segments(long size, long align, int addressWidth) {

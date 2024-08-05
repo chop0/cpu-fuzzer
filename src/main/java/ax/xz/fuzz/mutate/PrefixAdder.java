@@ -1,6 +1,5 @@
 package ax.xz.fuzz.mutate;
 
-import ax.xz.fuzz.blocks.randomisers.ReverseRandomGenerator;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.Operand;
 import ax.xz.fuzz.instruction.ResourcePartition;
@@ -58,17 +57,6 @@ public class PrefixAdder implements Mutator {
 
 		return new PrefixMutation(prefixes);
 	}
-
-	@Override
-	public void reverse(ReverseRandomGenerator rng, ResourcePartition rp, Instruction instruction, DeferredMutation outcome) {
-		var mutation = (PrefixMutation) outcome;
-		rng.pushInt(mutation.addedPrefixes.size());
-
-		for (var prefix : mutation.addedPrefixes) {
-			rng.pushInt(prefixIndices.get(prefix.prefix));
-		}
-	}
-
 
 	private boolean canUsePrefix(Instruction insn, ResourcePartition rp, byte prefix) {
 		return switch (prefix) {
