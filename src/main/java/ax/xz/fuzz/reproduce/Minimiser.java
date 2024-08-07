@@ -4,7 +4,6 @@ import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.blocks.BlockEntry;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.runtime.*;
-import ax.xz.fuzz.runtime.state.CPUState;
 
 import java.util.*;
 
@@ -116,42 +115,6 @@ public class Minimiser {
 		return false;
 	}
 
-	private boolean simplifyRegistersOnce(TestCase tc) {
-		if (simplifyGprsOnce(tc)) {
-			return true;
-		}
-
-		if (simplifyZmmOnce(tc)) {
-			return true;
-		}
-
-		if (simplifyMmxOnce(tc)) {
-			return true;
-		}
-
-		return false;
-	}
-
-	private boolean simplifyGprsOnce(TestCase tc) {
-		var startState = tc.initialState();
-
-		var gprValues = startState.gprs().values();
-		for (int i = 0; i < gprValues.length; i++) {
-			if (gprValues[i] == 0)
-				continue;
-
-			long oldValue = gprValues[i];
-			gprValues[i] = 0;
-
-			if (executor.lookForMismatch(tc, attempts)) {
-				return true;
-			}
-
-			gprValues[i] = oldValue;
-		}
-
-		return false;
-	}
 
 	private void findVisitedBranches(Branch[] branches, int currentIndex, HashSet<Integer> visited) {
 		if (visited.contains(currentIndex)) {
@@ -216,43 +179,22 @@ public class Minimiser {
 		};
 	}
 
-	private boolean simplifyZmmOnce(TestCase tc) {
+	private boolean simplifyRegistersOnce(TestCase tc) {
 		var startState = tc.initialState();
 
-		var zmmValues = startState.zmm().zmm();
-		for (int i = 0; i < zmmValues.length; i++) {
-			if (isZeros(zmmValues[i]))
+		var registerValues = startState.values();
+		for (var descriptor : registerValues.keySet()) {
+			if (isZeros(registerValues.get(descriptor)))
 				continue;
 
-			var oldValue = zmmValues[i];
-			zmmValues[i] = new byte[64];
+			var oldValue = registerValues.get(descriptor);
+			registerValues.put(descriptor, new byte[oldValue.length]);
 
 			if (executor.lookForMismatch(tc, attempts)) {
 				return true;
 			}
 
-			zmmValues[i] = oldValue;
-		}
-
-		return false;
-	}
-
-	private boolean simplifyMmxOnce(TestCase tc) {
-		var startState = tc.initialState();
-
-		var mmxValues = startState.mmx().mm();
-		for (int i = 0; i < mmxValues.length; i++) {
-			if (mmxValues[i] == 0)
-				continue;
-
-			var oldValue = mmxValues[i];
-			mmxValues[i] = 0;
-
-			if (executor.lookForMismatch(tc, attempts)) {
-				return true;
-			}
-
-			mmxValues[i] = oldValue;
+			registerValues.put(descriptor, oldValue);
 		}
 
 		return false;

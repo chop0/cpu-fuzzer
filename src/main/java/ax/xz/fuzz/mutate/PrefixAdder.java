@@ -1,17 +1,17 @@
 package ax.xz.fuzz.mutate;
 
-import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.Operand;
 import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.instruction.x86.X86InstructionBuilder;
+import ax.xz.fuzz.instruction.x86.X86Opcode;
 import com.github.icedland.iced.x86.Instruction;
 
 import java.util.*;
 import java.util.random.RandomGenerator;
 
-import static com.github.icedland.iced.x86.Register.*;
-import static java.lang.Math.min;
+import static ax.xz.fuzz.instruction.x86.x86RegisterDescriptor.*;
 
-public class PrefixAdder implements Mutator {
+public class PrefixAdder implements Mutator<X86Opcode, X86InstructionBuilder> {
 	private static final byte[] PREFIXES = {
 			(byte) 0xF0, (byte) 0xF2, (byte) 0xF3,
 			(byte) 0x2E, (byte) 0x36, (byte) 0x3E, (byte) 0x26, (byte) 0x64, (byte) 0x65,
@@ -27,7 +27,7 @@ public class PrefixAdder implements Mutator {
 	}
 
 	@Override
-	public boolean appliesTo(ResourcePartition rp, Opcode  opcode, Instruction instruction) {
+	public boolean appliesTo(ResourcePartition rp, X86Opcode opcode, X86InstructionBuilder instruction) {
 		for (Operand op : opcode.operands()) {
 			if (op.counted()) {
 				return false;
@@ -37,12 +37,12 @@ public class PrefixAdder implements Mutator {
 	}
 
 	@Override
-	public boolean comesFrom(ResourcePartition rp, Opcode code, Instruction instruction, DeferredMutation outcome) {
+	public boolean comesFrom(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction, DeferredMutation outcome) {
 		return outcome instanceof PrefixMutation;
 	}
 
 	@Override
-	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction) {
+	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, X86InstructionBuilder instruction) {
 		int addedCount = rng.nextInt(4);
 		var prefixes = new ArrayList<AddedPrefix>(addedCount);
 
@@ -50,7 +50,7 @@ public class PrefixAdder implements Mutator {
 			byte addedPrefix;
 			do {
 				addedPrefix =  PREFIXES[rng.nextInt(PREFIXES.length)];
-			} while (!canUsePrefix(instruction, rp, addedPrefix));
+			} while (!canUsePrefix(instruction.instruction(), rp, addedPrefix));
 
 			prefixes.add(new AddedPrefix(addedPrefix));
 		}

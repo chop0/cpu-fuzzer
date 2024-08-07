@@ -1,54 +1,66 @@
 package ax.xz.fuzz.runtime.state;
 
-import ax.xz.fuzz.tester.saved_state;
+import ax.xz.fuzz.instruction.RegisterDescriptor;
+import ax.xz.fuzz.runtime.Architecture;
 
-import java.lang.foreign.MemorySegment;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.random.RandomGenerator;
+import java.util.*;
 
-// TODO: include segment registers
-public record CPUState(GeneralPurposeRegisters gprs, VectorRegisters zmm, MMXRegisters mmx, long rflags) {
+public record CPUState( Map<RegisterDescriptor, byte[]> values) {
 	public List<RegisterDifference> diff(CPUState other) {
 		var differences = new ArrayList<RegisterDifference>();
-		differences.addAll(gprs.diff(other.gprs));
-		differences.addAll(zmm.diff(other.zmm));
-		differences.addAll(mmx.diff(other.mmx));
+
+		for (var entry : values.entrySet()) {
+			var register = entry.getKey();
+			var valueA = entry.getValue();
+			var valueB = other.values.get(register);
+
+			if (!Arrays.equals(valueA, valueB)) {
+				differences.add(new RegisterDifference(register, valueA, valueB));
+			}
+		}
+
 		return differences;
 	}
 
-	public static CPUState ofSavedState(MemorySegment savedState) {
-		return new CPUState(
-				GeneralPurposeRegisters.ofSavedState(savedState),
-				VectorRegisters.ofArray(saved_state.zmm(savedState)),
-				MMXRegisters.ofArray(saved_state.mm(savedState)),
-				saved_state.rflags(savedState)
-		);
+	public static CPUState zeroed() {
+		return new CPUState(Map.of());
 	}
 
-	public void toSavedState(MemorySegment savedState) {
-		gprs.toSavedState(savedState);
-		zmm.toArray(saved_state.zmm(savedState));
-		mmx.toArray(saved_state.mm(savedState));
-		saved_state.rflags(savedState, rflags);
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+
+		if (obj == null || getClass() != obj.getClass()) {
+			return false;
+		}
+
+		CPUState cpuState = (CPUState) obj;
+		for (var entry : values.entrySet()) {
+			var register = entry.getKey();
+			var valueA = entry.getValue();
+			var valueB = cpuState.values.get(register);
+
+			if (!Arrays.equals(valueA, valueB)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
-	public static CPUState filledWith(long thing) {
-		return new CPUState(
-				GeneralPurposeRegisters.filledWith(thing),
-				VectorRegisters.filledWith(thing),
-				MMXRegisters.filledWith(thing),
-				0
-		);
-	}
+	@Override
+	public String toString() {
+		var sorted = values.entrySet().stream().sorted(Comparator.comparing(e -> e.getKey().index())).toList();
+		var sb = new StringBuilder();
+		for (var entry : sorted) {
+			sb.append(entry.getKey()).append(": ");
+			for (var b : entry.getValue()) {
+				sb.append(String.format("%02x", b));
+			}
+			sb.append("\n");
+		}
 
-	public static CPUState random(RandomGenerator rng) {
-		return new CPUState(
-				GeneralPurposeRegisters.random(rng),
-				VectorRegisters.random(rng),
-				MMXRegisters.random(rng),
-				0
-		);
+		return sb.toString();
 	}
-
 }

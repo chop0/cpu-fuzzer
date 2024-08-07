@@ -1,12 +1,19 @@
 package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.blocks.*;
+import ax.xz.fuzz.instruction.RegisterDescriptor;
+import ax.xz.fuzz.instruction.x86.x86RegisterDescriptor;
 import ax.xz.fuzz.runtime.state.CPUState;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.KeyDeserializer;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.impl.StdSubtypeResolver;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.util.StdConverter;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
@@ -15,6 +22,7 @@ import com.github.icedland.iced.x86.dec.Decoder;
 import com.github.icedland.iced.x86.fmt.StringOutput;
 import com.github.icedland.iced.x86.fmt.gas.GasFormatter;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -25,6 +33,7 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
+import static ax.xz.fuzz.runtime.Architecture.getArchitecture;
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
 import static ax.xz.fuzz.runtime.MemoryUtils.mmap;
 
@@ -72,9 +81,21 @@ public record RecordedTestCase(
 	public static RecordedTestCase fromXML(String xml) {
 		try {
 			var decoder = new XmlMapper();
+			var simpleModule = new SimpleModule();
+			simpleModule.addKeyDeserializer(RegisterDescriptor.class, new RegisterDescriptorDeserializer());
+			decoder.registerModule(simpleModule);
+
 			return decoder.readValue(xml, RecordedTestCase.class);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
+		}
+	}
+
+	private static class RegisterDescriptorDeserializer extends KeyDeserializer {
+
+		@Override
+		public Object deserializeKey(String key, DeserializationContext ctxt) throws IOException {
+			return x86RegisterDescriptor.fromString(key);
 		}
 	}
 

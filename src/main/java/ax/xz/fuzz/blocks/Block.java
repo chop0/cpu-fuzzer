@@ -3,9 +3,7 @@ package ax.xz.fuzz.blocks;
 import ax.xz.fuzz.instruction.Opcode;
 import com.github.icedland.iced.x86.Instruction;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.SequencedCollection;
 
 public interface Block {
 	default int size() {

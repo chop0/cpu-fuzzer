@@ -47,7 +47,7 @@ public record InterleavedBlock(BlockPair parent, List<InterleavedEntry> items) i
 
 	public record InterleavedEntry(BlockPair parent, Side side, int index) implements BlockEntry {
 		@Override
-		public byte[] encode(long rip) throws Block.UnencodeableException {
+		public byte[] encode(long rip) {
 			var block = switch (side) {
 				case LEFT -> parent.lhs();
 				case RIGHT -> parent.rhs();
@@ -65,11 +65,7 @@ public record InterleavedBlock(BlockPair parent, List<InterleavedEntry> items) i
 			if (this == o) return true;
 			if (!(o instanceof BlockEntry that)) return false;
 
-			try {
-				return Arrays.equals(encode(0), that.encode(0));
-			} catch (Block.UnencodeableException e) {
-				throw new RuntimeException(e);
-			}
+			return Arrays.equals(encode(0), that.encode(0));
 		}
 	}
 }

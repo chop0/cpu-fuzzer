@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.*;
 import java.util.random.RandomGenerator;
 
-public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet allowedRegisters, MemoryPartition memory, MemorySegment stack) {
+public record ResourcePartition( EnumSet<StatusFlag> statusFlags, RegisterSet allowedRegisters, MemoryPartition memory, MemorySegment stack) {
 	public ResourcePartition {
 		if (statusFlags == null)
 			statusFlags = EnumSet.noneOf(StatusFlag.class);
@@ -21,7 +21,7 @@ public record ResourcePartition(EnumSet<StatusFlag> statusFlags, RegisterSet all
 		return memory.selectSegment(random, requiredSize, alignment, addressWidthBytes);
 	}
 
-	public int selectRegister(RegisterSet desiredResources, RandomGenerator random) throws NoPossibilitiesException {
+	public RegisterDescriptor selectRegister(RegisterSet desiredResources, RandomGenerator random) throws NoPossibilitiesException {
 		var intersection = allowedRegisters.intersection(desiredResources);
 
 		if (intersection.isEmpty())

@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
@@ -20,8 +21,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.StructuredTaskScope;
 
+import static ax.xz.fuzz.runtime.Architecture.getArchitecture;
 import static ax.xz.fuzz.runtime.Config.defaultConfig;
 import static com.github.icedland.iced.x86.Register.RAX;
+import static java.nio.ByteOrder.nativeOrder;
 import static picocli.CommandLine.Command;
 import static picocli.CommandLine.Help.Visibility.ALWAYS;
 import static picocli.CommandLine.Option;
@@ -74,7 +77,7 @@ public class FuzzCommand implements Callable<Void> {
 
 	@Override
 	public Void call() throws IOException, ExecutionException {
-		var config = new Config(threadCount, blockCount, maxInstructionCount, branchLimit, REGISTERS.indexOf(counterRegister) + RAX);
+		var config = new Config(threadCount, blockCount, maxInstructionCount, branchLimit,  getArchitecture().defaultCounter());
 
 		var host = new InetSocketAddress(metricsHost, metricsPort);
 
@@ -109,11 +112,14 @@ public class FuzzCommand implements Callable<Void> {
 
 		while (!Thread.interrupted()) {
 			var results = t.runTest();
-
+			
 			recordResults(config, metrics, results.a());
 			recordResults(config, metrics, results.b());
 
 			if (results.hasInterestingMismatch()) {
+				if (results.a() instanceof ExecutionResult.Success(var A) && results.b() instanceof ExecutionResult.Success(var B)) {
+					System.out.println(A.diff(B));
+				}
 				metrics.incrementMismatch();
 				var time = System.currentTimeMillis();
 				var xml = t.record(results.tc()).toXML();
@@ -132,10 +138,24 @@ public class FuzzCommand implements Callable<Void> {
 	private void recordResults(Config config, NetMetrics metrics, ExecutionResult result) {
 		if (result instanceof ExecutionResult.Success a) {
 			metrics.incNumSamples(false);
-			metrics.incrementBranches(a.state().gprs().values()[config.counterRegister() - RAX]);
+			metrics.incrementBranches(getCounterValue(config, a));
 		} else if (result instanceof ExecutionResult.Fault a) {
 			metrics.incNumSamples(true);
+			metrics.incFaultType(a.getClass().getSimpleName());
 			if (a instanceof ExecutionResult.Fault.Sigalrm) metrics.incrementAlarm();
 		}
+	}
+
+	private long getCounterValue(Config config, ExecutionResult.Success a) {
+		var bytes = a.state().values().get(config.counterRegister());
+		var bb = ByteBuffer.allocate(bytes.length).order(nativeOrder()).put(bytes).flip();
+
+		return switch (bb.remaining()) {
+			case 1 -> bb.get() & 0xFF;
+			case 2 -> bb.getShort() & 0xFFFF;
+			case 4 -> bb.getInt() & 0xFFFFFFFFL;
+			case 8 -> bb.getLong() & 0xFFFFFFFFFFFFFFFFL;
+			default -> throw new IllegalStateException("Unexpected value: " + bb.remaining());
+		};
 	}
 }

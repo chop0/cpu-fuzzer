@@ -1,10 +1,12 @@
 package ax.xz.fuzz.runtime.state;
 
+import ax.xz.fuzz.instruction.RegisterDescriptor;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public record RegisterDifference(String registerName, int register, byte[] valueA, byte[] valueB) {
+public record RegisterDifference(RegisterDescriptor register, byte[] valueA, byte[] valueB) {
 	public RegisterDifference {
 		if (valueA.length != valueB.length)
 			throw new IllegalArgumentException("Values must have the same length");
@@ -15,7 +17,7 @@ public record RegisterDifference(String registerName, int register, byte[] value
 
 	public String toString() {
 		var builder = new StringBuilder();
-		builder.append("Register ").append(registerName).append(" (").append(register).append(") differs\n");
+		builder.append("Register ").append(register).append(" differs\n");
 		builder.append("Value A: ");
 		for (byte b : valueA) {
 			builder.append(String.format("%02X", b));

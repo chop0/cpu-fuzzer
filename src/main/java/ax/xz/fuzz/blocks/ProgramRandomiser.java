@@ -1,30 +1,32 @@
 package ax.xz.fuzz.blocks;
 
 import ax.xz.fuzz.instruction.*;
+import ax.xz.fuzz.instruction.x86.OpcodeCache;
+import ax.xz.fuzz.instruction.x86.x86RegisterBanks;
 import ax.xz.fuzz.mutate.*;
 import ax.xz.fuzz.runtime.Branch;
 import ax.xz.fuzz.runtime.Config;
 import ax.xz.fuzz.runtime.ExecutableSequence;
 import ax.xz.fuzz.runtime.state.CPUState;
-import ax.xz.fuzz.runtime.state.GeneralPurposeRegisters;
 import ax.xz.fuzz.tester.saved_state;
-import com.github.icedland.iced.x86.Instruction;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.runtime.state.GeneralPurposeRegisters.constituents;
+import static ax.xz.fuzz.runtime.Architecture.getArchitecture;
 import static com.github.icedland.iced.x86.Register.RSP;
 import static java.lang.foreign.ValueLayout.JAVA_LONG;
+import static java.nio.ByteOrder.nativeOrder;
 
 public class ProgramRandomiser {
 	public static final int MEMORY_GRANULARITY = 64;
 
 	public static final Mutator[] mutators = {
 		new PrefixAdder(),
-		new RexAdder(),  // TODO : fix vex adder
+//		new RexAdder(),  // TODO : fix vex adder
 //		new VexAdder(),
 		new PrefixDuplicator()
 	};
@@ -55,21 +57,27 @@ public class ProgramRandomiser {
 		var  b = split.right();
 		var master = split.master();
 
-		long[] gprs = new long[constituents.length];
-		for (int i = 0; i < gprs.length; i++) {
-			var rp = a.allowedRegisters().hasRegister(constituents[i]) ? a : b;
-			gprs[i] = selectInterestingValue(rng, rp);
+		var map = new HashMap<RegisterDescriptor, byte[]>();
+		for (var reg : getArchitecture().trackedRegisters().intersection(master.allowedRegisters())) {
+			var rp = a.allowedRegisters().hasRegister(reg) ? a : b;
+
+			if (reg ==  getArchitecture().stackPointer())
+				map.put(reg, ByteBuffer.allocate(8).order(nativeOrder())
+					.putLong(master.stack().address() + master.stack().byteSize()/2).array());
+			else if (reg.widthBytes() == 8) {
+				map.put(reg, ByteBuffer.allocate(8).order(nativeOrder())
+					.putLong(selectInterestingValue(rng, rp)).array());
+			}
+			else {
+				byte[] bytes = new byte[reg.widthBytes()];
+				rng.nextBytes(bytes);
+				map.put(reg, bytes);
+			}
 		}
 
-		var data = MemorySegment.ofArray(new long[(int) saved_state.sizeof() / 8]);
-		data.spliterator(JAVA_LONG).forEachRemaining(n -> n.set(JAVA_LONG, 0, rng.nextLong()));
-		var state = CPUState.ofSavedState(data);
-		return new CPUState(
-			new GeneralPurposeRegisters(gprs).withRsp(master.stack().address() + master.stack().byteSize()/2),
-			state.zmm(),
-			state.mmx(),
-			state.rflags() & ~((1 << 8) | (1 << 18)) // mask off TF and AC
-		);
+		// todo: fix x86 masking for TC and AC...
+
+		return new CPUState(map);
 	}
 
 	public long selectInterestingValue(RandomGenerator rng, ResourcePartition rp) {
@@ -151,7 +159,7 @@ public class ProgramRandomiser {
 		var rhsRegisters = RegisterSet.of();
 
 		var universe = master.allowedRegisters();
-		for (var bank : RegisterSet.bankSets) {
+		for (var bank : x86RegisterBanks.bankSets) {
 			if (rng.nextBoolean())
 				lhsRegisters = lhsRegisters.union(bank.intersection(universe));
 			else
@@ -164,9 +172,10 @@ public class ProgramRandomiser {
 
 		var memorySplit = selectMemorySplit(master);
 
+		var sp =  getArchitecture().stackPointer();
 		return new ResourceSplit(
-			new ResourcePartition(lhsFlags, lhsRegisters, memorySplit.getKey(), lhsRegisters.hasRegister(RSP) ? master.stack() : MemorySegment.NULL),
-			new ResourcePartition(EnumSet.complementOf(lhsFlags), rhsRegisters, memorySplit.getValue(), rhsRegisters.hasRegister(RSP) ? master.stack() : MemorySegment.NULL),
+			new ResourcePartition(lhsFlags, lhsRegisters, memorySplit.getKey(), lhsRegisters.hasRegister(sp) ? master.stack() : MemorySegment.NULL),
+			new ResourcePartition(EnumSet.complementOf(lhsFlags), rhsRegisters, memorySplit.getValue(), rhsRegisters.hasRegister(sp) ? master.stack() : MemorySegment.NULL),
 			master
 		);
 	}
@@ -194,9 +203,9 @@ public class ProgramRandomiser {
 	public BlockEntry.FuzzEntry selectBlockEntry(RandomGenerator rng, ResourcePartition partition) {
 		for (; ; ) {
 			var variant = allOpcodes()[rng.nextInt(allOpcodes().length)];
-			if (!variant.fulfilledBy(true, partition)) continue;
+			if (!variant.fulfilledBy(partition)) continue;
 
-			Instruction instruction = null;
+			InstructionBuilder instruction = null;
 			try {
 				instruction = variant.select(rng, partition);
 			} catch (NoPossibilitiesException e) {
@@ -205,16 +214,11 @@ public class ProgramRandomiser {
 
 			var mut = selectMutations(rng, partition, variant, instruction);
 
-			return new BlockEntry.FuzzEntry(
-				partition,
-				variant,
-				instruction,
-				List.of(mut)
-			);
+			return new BlockEntry.FuzzEntry(instruction, List.of(mut));
 		}
 	}
 
-	public DeferredMutation[] selectMutations(RandomGenerator rng, ResourcePartition partition, Opcode opcode, Instruction original) {
+	public DeferredMutation[] selectMutations(RandomGenerator rng, ResourcePartition partition, Opcode opcode, InstructionBuilder original) {
 		var mutations = new ArrayList<DeferredMutation>();
 
 		for (Mutator mutator : mutators) {

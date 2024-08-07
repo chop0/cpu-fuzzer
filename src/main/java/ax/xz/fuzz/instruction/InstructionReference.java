@@ -1,5 +1,6 @@
 package ax.xz.fuzz.instruction;
 
+import ax.xz.fuzz.instruction.x86.*;
 import com.github.icedland.iced.x86.ConditionCode;
 import com.github.icedland.iced.x86.Instruction;
 import org.w3c.dom.*;
@@ -44,8 +45,8 @@ public class InstructionReference {
 			s.put(mnemonic, all);
 		}
 
-		s.put("ZEROUPPER", RegisterSet.ZMM_AVX512.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
-		s.put("ZEROALL", RegisterSet.ZMM_AVX512.stream().mapToObj(Operand.ImplicitReg::new).toArray(Operand[]::new));
+		s.put("ZEROUPPER", x86RegisterBanks.ZMM_AVX512.stream().map(ImplicitReg::new).toArray(Operand[]::new));
+		s.put("ZEROALL", x86RegisterBanks.ZMM_AVX512.stream().map(ImplicitReg::new).toArray(Operand[]::new));
 
 		suppressedOperands = Collections.unmodifiableMap(s);
 		System.out.println("Loaded " + suppressedOperands.size() + " suppressed operands");
@@ -102,7 +103,7 @@ public class InstructionReference {
 		return stripMnemonic(instruction.getAttributes().getNamedItem("asm").getNodeValue());
 	}
 
-	private static Set<Operand.Flags> statusFlags(Node instruction) {
+	private static Set<Flags> statusFlags(Node instruction) {
 		return stream(instruction.getChildNodes())
 				.filter(op -> op instanceof Element)
 				.filter(op -> op.getAttributes().getNamedItem("suppressed") != null)
@@ -113,12 +114,12 @@ public class InstructionReference {
 				.map(name -> name.split("_")[1])
 				.map(StatusFlag::valueOf)
 
-				.map(Operand.Flags::new)
+				.map(Flags::new)
 				.collect(toSet());
 	}
 
 
-	public static Set<Operand.ImplicitReg> registers(Node instruction) {
+	public static Set<ImplicitReg> registers(Node instruction) {
 		return stream(instruction.getChildNodes())
 				.filter(op -> op instanceof Element)
 				.filter(op -> op.getAttributes().getNamedItem("suppressed") != null)
@@ -126,30 +127,30 @@ public class InstructionReference {
 				.filter(c -> c != null && !c.isBlank())
 				.flatMap(n -> Arrays.stream(n.split(",")))
 				.map(n -> {
-					var id = Registers.byName(n);
+					var id = x86RegisterDescriptor.fromString(n);
 					if (id == null)
 						throw new NullPointerException(n + " not found");
 					return id;
 				})
-			.flatMapToInt(n -> Arrays.stream(RegisterSet.getAssociatedRegisters(n)))
-				.mapToObj(Operand.ImplicitReg::new)
+			.flatMap(n -> x86RegisterBanks.getAssociatedRegisters(n).stream())
+				.map(ImplicitReg::new)
 				.collect(toSet());
 	}
 
-	public static Set<Operand.ImplicitReg> registersBase(Node instruction) {
+	public static Set<ImplicitReg> registersBase(Node instruction) {
 		return stream(instruction.getChildNodes())
 			.filter(op -> op instanceof Element)
 			.filter(op -> op.getAttributes().getNamedItem("suppressed") != null)
 			.map(node -> ((Element) node).getAttribute("base"))
 			.filter(c -> !c.isBlank())
 			.map(n -> {
-				var id = Registers.byName(n);
+				var id = x86RegisterDescriptor.fromString(n);
 				if (id == null)
 					throw new NullPointerException(n + " not found");
 				return id;
 			})
-			.flatMapToInt(n -> Arrays.stream(RegisterSet.getAssociatedRegisters(n)))
-			.mapToObj(Operand.ImplicitReg::new)
+			.flatMap(n -> x86RegisterBanks.getAssociatedRegisters(n).stream())
+			.map(ImplicitReg::new)
 			.collect(toSet());
 	}
 

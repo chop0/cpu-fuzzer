@@ -275,7 +275,7 @@ void* maybe_allocate_signal_stack(void) {
 		exit(EXIT_FAILURE);
 	}
 
-	debug_file_address = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED_VALIDATE, debug_file_fd, 0);
+	debug_file_address = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, debug_file_fd, 0);
 	if (debug_file_address == MAP_FAILED) {
 		perror("mmap");
 		exit(EXIT_FAILURE);

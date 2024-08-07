@@ -1,6 +1,8 @@
 package ax.xz.fuzz.mutate;
 
 import ax.xz.fuzz.instruction.RegisterSet;
+import ax.xz.fuzz.instruction.x86.x86RegisterBank;
+import ax.xz.fuzz.instruction.x86.x86RegisterDescriptor;
 import com.github.icedland.iced.x86.EncodingKind;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
@@ -45,7 +47,7 @@ public class Encoding {
 			int opkind = instruction.getOpKind(i);
 			if (opkind == OpKind.REGISTER) {
 				int register = instruction.getOpRegister(i);
-				if (set.hasRegister(register))
+				if (set.hasRegister(x86RegisterDescriptor.byIcedId(register)))
 					return true;
 			}
 		}

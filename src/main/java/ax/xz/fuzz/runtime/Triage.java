@@ -1,15 +1,11 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.blocks.Block;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.zip.DataFormatException;
 
-import static ax.xz.fuzz.runtime.ExecutionResult.interestingMismatch;
-import static com.github.icedland.iced.x86.Register.RAX;
-import static com.github.icedland.iced.x86.Register.XMM0;
+import static ax.xz.fuzz.runtime.Architecture.getArchitecture;
 
 public class Triage {
 	public static void runFile(Path file, int attempts) throws IOException, DataFormatException {
@@ -26,10 +22,11 @@ public class Triage {
 		for (int i = 0; i < attempts; i++) {
 			var result2 = tester.runSequence(tc.initialState(), sequenceB).result();
 
-			if (interestingMismatch(lastResult, result2)) {
+			System.out.println(lastResult);
+			System.out.println(result2);
+
+			if (getArchitecture().interestingMismatch(lastResult, result2)) {
 				System.out.println("Interesting mismatch found");
-				System.out.println(lastResult);
-				System.out.println(result2);
 
 				if (lastResult instanceof ExecutionResult.Success(var A) && result2 instanceof ExecutionResult.Success(var B)) {
 					System.out.println(A.diff(B));

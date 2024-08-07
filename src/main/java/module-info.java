@@ -23,4 +23,5 @@ module ax.xz.fuzz {
 
 	exports ax.xz.fuzz to info.picocli;
 	opens ax.xz.fuzz.reproduce to com.fasterxml.jackson.databind;
+	opens ax.xz.fuzz.instruction.x86 to com.fasterxml.jackson.databind;
 }

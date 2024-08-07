@@ -34,6 +34,14 @@ struct saved_state {
     uint64_t rflags;
 }  __attribute__((aligned(16)));
 
+struct callee_saved {
+	uint64_t r12, r13, r14, r15, rbx, rbp, rsp;
+	uint64_t rflags;
+	uint32_t mxcsr;
+	uint8_t fenv[28];
+	uint64_t fs_base, gs_base;
+};
+
 #define SAVED_STATE_QFIELDS(V) \
     V(fs_base) \
     V(gs_base) \

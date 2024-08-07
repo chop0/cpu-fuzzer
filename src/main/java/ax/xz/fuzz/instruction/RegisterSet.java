@@ -1,5 +1,7 @@
 package ax.xz.fuzz.instruction;
 
+import ax.xz.fuzz.runtime.Architecture;
+
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Iterator;
@@ -7,61 +9,18 @@ import java.util.Objects;
 import java.util.random.RandomGenerator;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
-import static com.github.icedland.iced.x86.Register.*;
-import static java.util.stream.IntStream.rangeClosed;
+import static ax.xz.fuzz.runtime.Architecture.getArchitecture;
 
-public final class RegisterSet implements Iterable<Integer> {
-	public static RegisterSet GPB = RegisterSet.of(rangeClosed(AL, R15L).toArray());
-	public static RegisterSet GPW = RegisterSet.of(rangeClosed(AX, R15W).toArray());
-	public static RegisterSet GPD = RegisterSet.of(rangeClosed(EAX, R15D).toArray());
-	public static RegisterSet GPQ = RegisterSet.of(rangeClosed(RAX, R15).toArray());
-	public static RegisterSet GP = GPB.union(GPW).union(GPD).union(GPQ);
-
-	public static RegisterSet CR = RegisterSet.of(rangeClosed(CR0, CR15).toArray());
-
-	public static RegisterSet EXTENDED_GP = GPQ // things that trigger rex prefix
-		.union(RegisterSet.of(rangeClosed(R8D, R15D).toArray()))
-		.union(RegisterSet.of(rangeClosed(R8W, R15W).toArray()))
-		.union(RegisterSet.of(rangeClosed(R8L, R15L).toArray()))
-		.union(RegisterSet.of(SIL, DIL, SPL, BPL));
-	public static RegisterSet LEGACY_HIGH_GP = RegisterSet.of(AH, CH, DH, BH);
-
-	public static RegisterSet MM = RegisterSet.of(rangeClosed(MM0, MM7).toArray());
-
-	public static RegisterSet XMM_AVX2 = RegisterSet.of(rangeClosed(XMM0, XMM15).toArray());
-	public static RegisterSet XMM_AVX512 = RegisterSet.of(rangeClosed(XMM0, XMM31).toArray());
-
-	public static RegisterSet YMM_AVX2 = RegisterSet.of(rangeClosed(YMM0, YMM15).toArray());
-	public static RegisterSet YMM_AVX512 = RegisterSet.of(rangeClosed(YMM0, YMM31).toArray());
-
-	public static RegisterSet ZMM_VEX = RegisterSet.of(rangeClosed(ZMM0, ZMM15).toArray());
-	public static RegisterSet ZMM_AVX512 = RegisterSet.of(rangeClosed(ZMM0, ZMM31).toArray());
-
-	public static RegisterSet VECTOR_VEX = MM.union(XMM_AVX2).union(YMM_AVX2);
-	public static RegisterSet VECTOR_EVEX = MM.union(XMM_AVX512).union(YMM_AVX512).union(ZMM_AVX512);
-
-
-	public static RegisterSet TMM = RegisterSet.of(rangeClosed(TMM0, TMM7).toArray());
-
-	public static RegisterSet ST = RegisterSet.of(rangeClosed(ST0, ST7).toArray());
-
-	public static RegisterSet MASK = RegisterSet.of(rangeClosed(K0, K7).toArray());
-
-	public static RegisterSet SEGMENT = RegisterSet.of(rangeClosed(ES, GS).toArray());
-	public static final RegisterSet SPECIAL = of(Registers.MXCSR);
-	public static RegisterSet ALL_AVX2 = GP.union(VECTOR_VEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
-	public static RegisterSet ALL_AVX512 = GP.union(ST).union(VECTOR_EVEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
-
+public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	public static RegisterSet EMPTY = new RegisterSet(new BitSet());
 
-
-	public static RegisterSet of(int... registers) {
+	public static RegisterSet of(RegisterDescriptor... registers) {
 		if (registers.length == 0)
 			return EMPTY;
 
-		return new RegisterSet(Arrays.stream(registers).collect(BitSet::new, BitSet::set, BitSet::or));
+		return Arrays.stream(registers).collect(collector());
 	}
 
 	private static RegisterSet of(BitSet enabled) {
@@ -71,35 +30,13 @@ public final class RegisterSet implements Iterable<Integer> {
 		return new RegisterSet( enabled);
 	}
 
-	public static RegisterSet ofRange(int startInclusive, int endInclusive) {
-		return of(rangeClosed(startInclusive, endInclusive).collect(BitSet::new, BitSet::set, BitSet::or));
-	}
-
-	public static RegisterSet generalPurpose(int size) {
-		return switch (size) {
-			case 8 -> GPB;
-			case 16 -> GPW;
-			case 32 -> GPD;
-			case 64 -> GPQ;
-			default -> throw new IllegalStateException("Unexpected operand size: " + size);
-		};
-	}
-
-	public static RegisterSet vector(int size, boolean hasEvexPrefix) {
-		return switch (size) {
-			case 64 -> MM;
-			case 128 -> hasEvexPrefix ? XMM_AVX512 : XMM_AVX2;
-			case 256 -> hasEvexPrefix ? YMM_AVX512 : YMM_AVX2;
-			case 512 -> hasEvexPrefix ? ZMM_AVX512 : ZMM_VEX;
-			default -> throw new IllegalStateException("Unexpected operand size: " + size);
-		};
-	}
-
-	public static Collector<Integer, BitSet, RegisterSet> collector() {
-		return Collector.of(BitSet::new, BitSet::set, (bs1, bs2) -> {
+	public static Collector<? super RegisterDescriptor, BitSet, RegisterSet> collector() {
+		return Collector.of(BitSet::new, (bitSet, registerDescriptor) -> {
+			bitSet.set(registerDescriptor.index());
+		}, (bs1, bs2) -> {
 			bs1.or(bs2);
 			return bs1;
-		}, RegisterSet::new);
+		}, registers1 -> new RegisterSet(registers1));
 	}
 
 	private final BitSet registers;
@@ -108,8 +45,8 @@ public final class RegisterSet implements Iterable<Integer> {
 		this.registers = registers;
 	}
 
-	public boolean hasRegister(int register) {
-		return registers.get(register);
+	public boolean hasRegister(RegisterDescriptor register) {
+		return registers.get(register.index());
 	}
 
 	public RegisterSet intersection(RegisterSet other) {
@@ -163,7 +100,7 @@ public final class RegisterSet implements Iterable<Integer> {
 		return this == EMPTY;
 	}
 
-	public int select(RandomGenerator randomGenerator) {
+	public RegisterDescriptor select(RandomGenerator randomGenerator) {
 		if (isEmpty())
 			throw new IllegalStateException("Cannot choose from empty register set");
 
@@ -174,7 +111,7 @@ public final class RegisterSet implements Iterable<Integer> {
 			currentIndex = registers.nextSetBit(currentIndex + 1);
 		}
 
-		return currentIndex;
+		return getArchitecture().registerByIndex(currentIndex);
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {
@@ -185,12 +122,16 @@ public final class RegisterSet implements Iterable<Integer> {
 		return of(vectorBlocks);
 	}
 
-	public IntStream stream() {
-		return registers.stream();
+	public Stream<RegisterDescriptor> stream() {
+		return registers.stream().mapToObj(n -> getArchitecture().registerByIndex(n));
 	}
 
-	public int first() {
-		return registers.nextSetBit(0);
+	public RegisterDescriptor first() {
+		return getArchitecture().registerByIndex(registers.nextSetBit(0));
+	}
+
+	public RegisterDescriptor last() {
+		return getArchitecture().registerByIndex(registers.previousSetBit(registers.length() - 1));
 	}
 
 	@Override
@@ -209,7 +150,8 @@ public final class RegisterSet implements Iterable<Integer> {
 	@Override
 	public String toString() {
 		return registers.stream()
-			.mapToObj(Registers::byValue)
+			.mapToObj(getArchitecture()::registerByIndex)
+			.map(n -> n.toString())
 			.collect(Collectors.joining(", ", "{", "}"));
 	}
 
@@ -219,81 +161,9 @@ public final class RegisterSet implements Iterable<Integer> {
 		return newSet;
 	}
 
-	public static final int[][] banks = {
-		{AL, AH, AX, EAX, RAX},
-		{BL, BH, BX, EBX, RBX},
-		{CL, CH, CX, ECX, RCX},
-		{DL, DH, DX, EDX, RDX},
-		{SIL, SI, ESI, RSI},
-		{DIL, DI, EDI, RDI},
-		{SPL, SP, ESP, RSP},
-		{BPL, BP, EBP, RBP},
-		{R8L, R8W, R8D, R8},
-		{R9L, R9W, R9D, R9},
-		{R10L, R10W, R10D, R10},
-		{R11L, R11W, R11D, R11},
-		{R12L, R12W, R12D, R12},
-		{R13L, R13W, R13D, R13},
-		{R14L, R14W, R14D, R14},
-		{R15L, R15W, R15D, R15},
-
-		{MM0, XMM0, YMM0, ZMM0},
-		{MM1, XMM1, YMM1, ZMM1},
-		{MM2, XMM2, YMM2, ZMM2},
-		{MM3, XMM3, YMM3, ZMM3},
-		{MM4, XMM4, YMM4, ZMM4},
-		{MM5, XMM5, YMM5, ZMM5},
-		{MM6, XMM6, YMM6, ZMM6},
-		{MM7, XMM7, YMM7, ZMM7},
-		{ XMM8, YMM8, ZMM8},
-		{ XMM9, YMM9, ZMM9},
-		{ XMM10, YMM10, ZMM10},
-		{ XMM11, YMM11, ZMM11},
-		{ XMM12, YMM12, ZMM12},
-		{ XMM13, YMM13, ZMM13},
-		{ XMM14, YMM14, ZMM14},
-		{ XMM15, YMM15, ZMM15},
-		{ XMM16, YMM16, ZMM16},
-		{ XMM17, YMM17, ZMM17},
-		{ XMM18, YMM18, ZMM18},
-		{ XMM19, YMM19, ZMM19},
-		{ XMM20, YMM20, ZMM20},
-		{ XMM21, YMM21, ZMM21},
-		{ XMM22, YMM22, ZMM22},
-		{ XMM23, YMM23, ZMM23},
-		{ XMM24, YMM24, ZMM24},
-		{ XMM25, YMM25, ZMM25},
-		{ XMM26, YMM26, ZMM26},
-		{ XMM27, YMM27, ZMM27},
-		{ XMM28, YMM28, ZMM28},
-		{ XMM29, YMM29, ZMM29},
-		{ XMM30, YMM30, ZMM30},
-		{ XMM31, YMM31, ZMM31},
-	};
-
-	public static final RegisterSet[] bankSets = Arrays.stream(banks)
-		.map(RegisterSet::of)
-		.toArray(RegisterSet[]::new);
-
-
-	public static int[] getAssociatedRegisters(int register) {
-		for (int[] bank : banks) {
-			for (int i = 0; i < bank.length; i++) {
-				if (bank[i] == register) {
-					return bank;
-				}
-			}
-		}
-
-		return new int[]{register};
-	}
-
-	public static RegisterSet getAssociatedRegisterSet(int register) {
-		return RegisterSet.of(getAssociatedRegisters(register));
-	}
 
 	@Override
-	public Iterator<Integer> iterator() {
-		return registers.stream().iterator();
+	public Iterator<RegisterDescriptor> iterator() {
+		return registers.stream().mapToObj(getArchitecture()::registerByIndex).iterator();
 	}
 }

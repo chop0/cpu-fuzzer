@@ -1,7 +1,10 @@
 package ax.xz.fuzz.mutate;
 
+import ax.xz.fuzz.instruction.InstructionBuilder;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.instruction.x86.X86InstructionBuilder;
+import ax.xz.fuzz.instruction.x86.X86Opcode;
 import com.github.icedland.iced.x86.Instruction;
 import com.github.icedland.iced.x86.OpKind;
 import com.github.icedland.iced.x86.Register;
@@ -11,16 +14,16 @@ import java.util.random.RandomGenerator;
 import static ax.xz.fuzz.mutate.Encoding.isLegacyPrefix;
 import static com.github.icedland.iced.x86.Register.*;
 
-public class PrefixDuplicator implements Mutator {
+public class PrefixDuplicator implements Mutator<X86Opcode, X86InstructionBuilder> {
 
 
 	@Override
-	public boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction) {
+	public boolean appliesTo(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction) {
 		return true;
 	}
 
 	@Override
-	public boolean comesFrom(ResourcePartition rp, Opcode code, Instruction instruction, DeferredMutation outcome) {
+	public boolean comesFrom(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction, DeferredMutation outcome) {
 		return outcome instanceof PrefixDupeMutation;
 	}
 
@@ -35,7 +38,8 @@ public class PrefixDuplicator implements Mutator {
 	}
 
 	@Override
-	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction) {
+	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, X86InstructionBuilder b) {
+		var instruction = b.instruction();
 		return new PrefixDupeMutation(instruction,
 			instruction.getRepePrefix() ? rng.nextInt(2) : 0,
 			instruction.getRepnePrefix() ? rng.nextInt(2) : 0,

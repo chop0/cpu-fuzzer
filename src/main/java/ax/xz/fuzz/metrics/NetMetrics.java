@@ -4,12 +4,15 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class NetMetrics implements AutoCloseable {
 	private static class ThreadMetrics {
 		private long faultedSamples, succeededSamples, alarm, branches, mismatch;
+		private Map<String, Integer> faultsByType = new HashMap<>();
 		private final long id;
 
 		private ThreadMetrics(long id) {
@@ -57,6 +60,10 @@ public class NetMetrics implements AutoCloseable {
 			sb.append("timeout{thread=\"%d\"} %d%n".formatted(threadId, entry.getValue().alarm));
 			sb.append("mismatches_total{thread=\"%d\"} %d%n".formatted(threadId, entry.getValue().mismatch));
 			sb.append("branches_executed_total{thread=\"%d\"} %d%n".formatted(threadId, entry.getValue().branches));
+
+			for (var fault : entry.getValue().faultsByType.entrySet()) {
+				sb.append("faults_total{thread=\"%d\", type=\"%s\"} %d%n".formatted(threadId, fault.getKey(), fault.getValue()));
+			}
 		}
 
 		return sb.toString();
@@ -68,6 +75,10 @@ public class NetMetrics implements AutoCloseable {
 			metrics.faultedSamples++;
 		else
 			metrics.succeededSamples++;
+	}
+
+	public synchronized void incFaultType(String type) {
+		metricsLocal.get().faultsByType.merge(type, 1, Integer::sum);
 	}
 
 	public synchronized void incrementAlarm() {

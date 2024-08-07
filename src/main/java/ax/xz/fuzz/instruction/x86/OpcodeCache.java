@@ -1,5 +1,9 @@
-package ax.xz.fuzz.blocks;
+package ax.xz.fuzz.instruction.x86;
 
+import ax.xz.fuzz.blocks.BasicBlock;
+import ax.xz.fuzz.blocks.Block;
+import ax.xz.fuzz.blocks.BlockEntry;
+import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.instruction.MemoryPartition;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
@@ -45,7 +49,7 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM,
 		RDPID_R32, RDPID_R64, RDPRU,
 		XSAVEOPT_MEM, XSAVEOPT64_MEM);
-	private static final List<String> disallowedPrefixes = List.of("BT", "BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
+	private static final List<String> disallowedPrefixes = List.of("PEXTR", "BT", "BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
 
 	private static final int OPCODES_CACHE_VERSION = blacklistedOpcodes.hashCode() ^ disallowedPrefixes.hashCode();
 	private static final Path OPCODES_CACHE_PATH = Path.of("opcodes.json");
@@ -105,7 +109,7 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		return mapper;
 	}
 
-	private static Stream<Opcode> getOpcodeIDs() {
+	private static Stream<X86Opcode> getOpcodeIDs() {
 		return Arrays.stream(Code.class.getFields())
 			.filter(field -> (field.getModifiers() & (Modifier.FINAL | Modifier.STATIC)) == (Modifier.FINAL | Modifier.STATIC))
 			.map(field -> {
@@ -117,11 +121,11 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 					throw new ExceptionInInitializerError(e);
 				}
 
-				return Opcode.of(opCode, field.getName());
+				return X86Opcode.of(opCode, field.getName());
 			}).filter(Objects::nonNull);
 	}
 
-	private static boolean isOpcodeAllowed(Opcode opcode) {
+	private static boolean isOpcodeAllowed(X86Opcode opcode) {
 		var info = Code.toOpCode(opcode.icedVariant());
 		var op = info.getOpCode();
 		if (!info.getLongMode())
@@ -149,25 +153,14 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 	}
 
 	private static final Random r = new Random(0);
-	private static boolean doesOpcodeWork(Opcode opcode) {
+	private static boolean doesOpcodeWork(X86Opcode opcode) {
 		try (var arena = Arena.ofConfined()) {
 			var executor = SequenceExecutor.withIndex(Config.defaultConfig(), 0);
 			var scratch = mmap(arena, MemorySegment.ofAddress(0x4000000), 4096, READ, WRITE);
 			var rp = new ResourcePartition(StatusFlag.all(), executor.legallyModifiableRegisters(), MemoryPartition.of(scratch), scratch);
 			var insn = opcode.configureRandomly(r, rp);
 
-			Block[] blocks = { new BasicBlock(List.of(
-				BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(),
-				new BlockEntry.FuzzEntry(rp, opcode, insn, List.of()),
-				BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1(), BlockEntry.nop1()
-			)) };
-			Branch[] branches = { new Branch(ExecutableSequence.BranchType.JA, 1, 1)};
-			var result = executor.runSequence(CPUState.filledWith(scratch.address()), new ExecutableSequence(blocks, branches)).result();
-
-			if (result instanceof ExecutionResult.Fault.Sigill)
-				System.out.println("Eliminated instruction due to sigill: " + opcode.icedFieldName());
-
-			return !(result instanceof ExecutionResult.Fault.Sigill);
+			return X86Architecture.checkInstructionExistence(asm -> asm.addInstruction(insn.instruction()));
 		} catch (RuntimeException e) {
 			if (e.getCause() instanceof Block.UnencodeableException)
 				return false;

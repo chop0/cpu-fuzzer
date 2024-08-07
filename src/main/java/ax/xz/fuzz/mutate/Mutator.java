@@ -1,14 +1,15 @@
 package ax.xz.fuzz.mutate;
 
+import ax.xz.fuzz.instruction.InstructionBuilder;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import com.github.icedland.iced.x86.Instruction;
 
 import java.util.random.RandomGenerator;
 
-public interface Mutator {
-	boolean appliesTo(ResourcePartition rp, Opcode code, Instruction instruction);
-	boolean comesFrom(ResourcePartition rp, Opcode code, Instruction instruction, DeferredMutation outcome);
+public interface Mutator<C extends Opcode, B extends InstructionBuilder> {
+	boolean appliesTo(ResourcePartition rp, C code, B instruction);
+	boolean comesFrom(ResourcePartition rp, C code, B instruction, DeferredMutation outcome);
 
-	DeferredMutation select(RandomGenerator rng, ResourcePartition rp, Instruction instruction);
+	DeferredMutation select(RandomGenerator rng, ResourcePartition rp, B instruction);
 }

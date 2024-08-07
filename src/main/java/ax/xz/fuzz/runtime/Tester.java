@@ -3,15 +3,18 @@ package ax.xz.fuzz.runtime;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.blocks.ProgramRandomiser;
 import ax.xz.fuzz.instruction.MemoryPartition;
-import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.instruction.StatusFlag;
 import ax.xz.fuzz.reproduce.Minimiser;
 
+import java.lang.foreign.MemorySegment;
 import java.util.SplittableRandom;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.runtime.ExecutionResult.interestingMismatch;
+import static ax.xz.fuzz.runtime.Architecture.getArchitecture;
+import static ax.xz.fuzz.runtime.RecordedTestCase.disassemble;
+import static ax.xz.fuzz.tester.slave_h.maybe_allocate_signal_stack;
+import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 public class Tester {
 	private final SequenceExecutor executor;
@@ -47,7 +50,7 @@ public class Tester {
 
 	public record TestResult(ExecutionResult a, ExecutionResult b, InvarianceTestCase tc) {
 		public boolean hasInterestingMismatch() {
-			return interestingMismatch(a, b);
+			return getArchitecture().interestingMismatch(a, b);
 		}
 	}
 
@@ -57,8 +60,8 @@ public class Tester {
 		var registers = executor.legallyModifiableRegisters();
 		var flags = StatusFlag.all();
 
-		var partition = new ResourcePartition(flags, registers.subtract(RegisterSet.getAssociatedRegisterSet(config.counterRegister())), MemoryPartition.of(executor.primaryScratch()), executor.stack());
-
+		var partition = new ResourcePartition(flags, registers.subtract(config.counterRegister().related()), MemoryPartition.of(executor.primaryScratch()), executor.stack());
+		maybe_allocate_signal_stack();
 		return new Tester(
 			executor,
 			new ProgramRandomiser(config),

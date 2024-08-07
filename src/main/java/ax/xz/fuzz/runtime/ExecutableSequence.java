@@ -34,10 +34,10 @@ public final class ExecutableSequence {
 	}
 
 	public int encode(MemorySegment code, Config config, long returnAddress) throws Block.UnencodeableException {
-		int counterRegister = config.counterRegister();
+		var counterRegister = config.counterRegister();
 		int counterBound = config.branchLimit();
 
-		var counter = new AsmRegister64(new ICRegister(counterRegister));
+		var counter = new AsmRegister64(new ICRegister(counterRegister.index()));
 		blockAssembler.reset();
 
 		// 1. our entrypoint

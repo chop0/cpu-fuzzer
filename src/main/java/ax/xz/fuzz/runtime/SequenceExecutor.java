@@ -1,11 +1,9 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.blocks.BasicBlock;
 import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.runtime.state.CPUState;
-import ax.xz.fuzz.tester.execution_result;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -13,17 +11,20 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.zip.DataFormatException;
 
-import static ax.xz.fuzz.runtime.ExecutionResult.interestingMismatch;
+import static ax.xz.fuzz.instruction.x86.x86RegisterBanks.SEGMENT;
+import static ax.xz.fuzz.instruction.x86.x86RegisterDescriptor.FS;
+import static ax.xz.fuzz.instruction.x86.x86RegisterDescriptor.GS;
 import static ax.xz.fuzz.runtime.RecordedTestCase.*;
 
 import static ax.xz.fuzz.runtime.MemoryUtils.Protection.*;
 import static ax.xz.fuzz.tester.slave_h.*;
+import static com.github.icedland.iced.x86.Register.CS;
 import static com.github.icedland.iced.x86.Register.SS;
 
 public class SequenceExecutor {
-	private static final RegisterSet ILLEGAL_REGISTERS = RegisterSet.of(SS);
-
 	private final Arena arena;
+
+	private final Architecture architecture;
 
 	private final MemorySegment primaryScratch;
 	private final MemorySegment stack;
@@ -35,8 +36,9 @@ public class SequenceExecutor {
 
 	private final Config config;
 
-	public SequenceExecutor(Arena arena, MemorySegment primaryScratch, MemorySegment stack, Config config, MemorySegment code, MemorySegment[] resettableMemory, MemorySegment[] memoryTemplate) {
+	public SequenceExecutor(Arena arena, Architecture architecture, MemorySegment primaryScratch, MemorySegment stack, Config config, MemorySegment code, MemorySegment[] resettableMemory, MemorySegment[] memoryTemplate) {
 		this.arena = arena;
+		this.architecture = architecture;
 		this.primaryScratch = primaryScratch;
 		this.stack = stack;
 		this.code = code;
@@ -59,7 +61,9 @@ public class SequenceExecutor {
 		} catch (Block.UnencodeableException e) {
 			throw new RuntimeException(e);
 		}
-		var result = runBlock(initialState, codeSlice);
+		formatMemory();
+
+		var result = architecture.runSegment(codeSlice, initialState);
 
 		return new SequenceResult(codeSlice, result);
 	}
@@ -73,7 +77,7 @@ public class SequenceExecutor {
 		for (int i = 0; i < attempts; i++) {
 			var result2 = runSequence(tc.initialState(), seqB).result();
 
-			if (interestingMismatch(lastResult, result2)) {
+			if (architecture.interestingMismatch(lastResult, result2)) {
 				return true;
 			}
 		}
@@ -81,7 +85,7 @@ public class SequenceExecutor {
 		return false;
 	}
 
-	private ExecutionResult runBlock(CPUState startState, MemorySegment code) {
+	private void formatMemory() {
 		for (int i = 0; i < resettableMemory.length; i++) {
 			var segment = resettableMemory[i];
 			if (memoryTemplate[i] != null)
@@ -89,17 +93,6 @@ public class SequenceExecutor {
 			else
 				segment.fill((byte) 0);
 		}
-
-		ExecutionResult result;
-		try (var arena = Arena.ofConfined()) {
-			var output = execution_result.allocate(arena);
-			startState.toSavedState(execution_result.state(output));
-			do_test(code, code.byteSize(), output);
-
-			result = ExecutionResult.ofStruct(output);
-		}
-
-		return result;
 	}
 
 	public RecordedTestCase record(InvarianceTestCase tc) {
@@ -112,7 +105,7 @@ public class SequenceExecutor {
 	}
 
 	public RegisterSet legallyModifiableRegisters() {
-		return Architecture.supportedRegisters().subtract(RegisterSet.of(SS, config.counterRegister()));
+		return architecture.validRegisters();
 	}
 
 	public MemorySegment primaryScratch() {
@@ -159,7 +152,7 @@ public class SequenceExecutor {
 		var stack = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x6a30000 + index * 4096L * 16 * 2), 4096, READ, WRITE, EXECUTE);
 
 		maybe_allocate_signal_stack();
-		return new SequenceExecutor(arena, scratch, stack, config, code, new MemorySegment[]{scratch, stack}, new MemorySegment[]{null, null});
+		return new SequenceExecutor(arena, Architecture.getArchitecture(), scratch, stack, config, code, new MemorySegment[]{scratch, stack}, new MemorySegment[]{null, null});
 	}
 
 	public static SequenceExecutor forRecordedCase(Config config, RecordedTestCase rtc) throws DataFormatException {
@@ -178,7 +171,7 @@ public class SequenceExecutor {
 		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(rtc.codeLocation()), 4096 * 16, READ, WRITE, EXECUTE);
 
 		maybe_allocate_signal_stack();
-		return new SequenceExecutor(arena, null, null, config, code, scratchRegions, templateRegions);
+		return new SequenceExecutor(arena, Architecture.getArchitecture(), null, null, config, code, scratchRegions, templateRegions);
 	}
 
 	public record SequenceResult(MemorySegment codeSlice, ExecutionResult result) {

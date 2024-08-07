@@ -1,5 +1,6 @@
 package ax.xz.fuzz.instruction;
 
+import ax.xz.fuzz.instruction.x86.*;
 import ax.xz.fuzz.parse.OperandBaseListener;
 import ax.xz.fuzz.parse.OperandParser;
 import com.github.icedland.iced.x86.OpKind;
@@ -7,7 +8,6 @@ import com.github.icedland.iced.x86.OpKind;
 import java.util.ArrayList;
 import java.util.List;
 
-import static ax.xz.fuzz.instruction.Operand.*;
 import static java.lang.Integer.parseInt;
 
 public class OperandWalker extends OperandBaseListener {
@@ -30,7 +30,7 @@ public class OperandWalker extends OperandBaseListener {
 
 	@Override
 	public void enterFixedReg(OperandParser.FixedRegContext ctx) {
-		operands.add(RmOperand.register(Registers.byName(ctx.getText())));
+		operands.add(RmOperand.register(x86RegisterDescriptor.fromString(ctx.getText())));
 	}
 
 	@Override
@@ -69,7 +69,7 @@ public class OperandWalker extends OperandBaseListener {
 
 	@Override
 	public void enterReg(OperandParser.RegContext ctx) {
-		var registerCandidates = RegisterSet.generalPurpose(parseInt(ctx.DIGITS() != null ? ctx.DIGITS().getText() : ctx.MEMORY_SIZE().getText().substring(1)));
+		var registerCandidates = x86RegisterBanks.generalPurpose(parseInt(ctx.DIGITS() != null ? ctx.DIGITS().getText() : ctx.MEMORY_SIZE().getText().substring(1)));
 
 		if (ctx.MEMORY_SIZE() == null)
 			operands.add(RmOperand.register(registerCandidates));
@@ -98,9 +98,10 @@ public class OperandWalker extends OperandBaseListener {
 		if (hasMultireg) {
 			int multiregCount = parseInt(ctx.MULTIREG_COUNT().getText().substring(1));
 
+			var bankFirst = (x86RegisterDescriptor)bank.first();
 			var candidates = bank.stream()
-				.filter(r -> r >= bank.first() && (r - bank.first()) % multiregCount == 0)
-				.boxed()
+				.map(r -> (x86RegisterDescriptor) r)
+				.filter(r -> r.icedId() >= bankFirst.icedId() && (r.icedId() - bankFirst.icedId()) % multiregCount == 0)
 				.collect(RegisterSet.collector());
 
 			operands.add(new VectorMultireg(multiregCount, candidates));
@@ -128,14 +129,14 @@ public class OperandWalker extends OperandBaseListener {
 
 	private RegisterSet getRegisterBank(String bankName) {
 		return switch (bankName) {
-			case "MM" -> RegisterSet.vector(64, hasEvexPrefix);
-			case "X", "XMM" -> RegisterSet.vector(128, hasEvexPrefix);
-			case "Y", "YMM" -> RegisterSet.vector(256, hasEvexPrefix);
-			case "Z", "ZMM" -> RegisterSet.vector(512, hasEvexPrefix);
-			case "TMM" -> RegisterSet.TMM;
-			case "STI" -> RegisterSet.ST;
-			case "SREG" -> RegisterSet.SEGMENT;
-			case "K", "KR" -> RegisterSet.MASK;
+			case "MM" -> x86RegisterBanks.vector(64, hasEvexPrefix);
+			case "X", "XMM" -> x86RegisterBanks.vector(128, hasEvexPrefix);
+			case "Y", "YMM" -> x86RegisterBanks.vector(256, hasEvexPrefix);
+			case "Z", "ZMM" -> x86RegisterBanks.vector(512, hasEvexPrefix);
+			case "TMM" -> x86RegisterBanks.TMM;
+			case "STI" -> x86RegisterBanks.ST;
+			case "SREG" -> x86RegisterBanks.SEGMENT;
+			case "K", "KR" -> x86RegisterBanks.MASK;
 			default -> throw new IllegalStateException("Unexpected operand bank: " + bankName);
 		};
 	}
