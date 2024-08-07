@@ -8,6 +8,8 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/ax.xz.fuzz" />
+            <option value="$PROJECT_DIR$/ax.xz.fuzz.x86" />
           </set>
         </option>
       </GradleProjectSettings>

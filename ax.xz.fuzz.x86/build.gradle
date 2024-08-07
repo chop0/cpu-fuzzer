@@ -1,0 +1,127 @@
+plugins {
+	id 'java-library'
+	id 'antlr'
+
+	id "io.github.krakowski.jextract" version "0.5.0"
+	id 'c'
+	id 'assembler'
+}
+
+group = 'ax.xz'
+version = '0.0.1'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+	implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
+	implementation 'com.fasterxml.jackson.core:jackson-core:2.17.2'
+	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.2'
+
+	implementation project(':ax.xz.fuzz')
+	antlr "org.antlr:antlr4:4.13.1"
+	implementation 'org.antlr:antlr4:4.13.1'
+
+	implementation 'io.github.icedland.iced:iced-x86:1.21.0'
+
+	testImplementation platform('org.junit:junit-bom:5.10.0')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+test {
+	useJUnitPlatform()
+}
+
+jextract {
+	header("${project.projectDir}/src/main/c/slave.h") {
+		libraries = ['slave']
+		targetPackage = 'ax.xz.fuzz.x86.tester'
+		className = "slave_h"
+		functions = ['trampoline_return_address', 'maybe_allocate_signal_stack', 'do_test']
+		constants = ['ILL_ILLOPC',
+			     'ILL_ILLOPN',
+			     'ILL_ILLADR',
+			     'ILL_ILLTRP',
+			     'ILL_PRVOPC',
+			     'ILL_PRVREG',
+			     'ILL_COPROC',
+			     'ILL_BADSTK'
+		]
+		useSystemLoadLibrary = true
+		libraries = ['main']
+
+		variables = ['routine_begin', 'routine_end']
+		structs = ['fault_details', 'execution_result', 'saved_state']
+	}
+}
+
+def copyX86SharedLibrary = tasks.register("makeX86SharedLibrary") {
+	def sharedFile = tasks.linkMainSharedLibrary.outputs.files.filter { it.name.contains("libmain.so") }.singleFile
+	inputs.file(sharedFile)
+	outputs.file("${project.layout.buildDirectory.asFile.get().toPath()}/libmain.so")
+
+	doLast {
+		copy {
+			from sharedFile
+			into project.layout.buildDirectory.asFile.get()
+		}
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	dependsOn copyX86SharedLibrary
+}
+
+model {
+	toolChains {
+		cross_gcc(Gcc) {
+			// if host if macos
+			if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+				target("linux") {
+					cCompiler.executable = "x86_64-unknown-linux-gnu-gcc"
+					assembler.executable = "x86_64-unknown-linux-gnu-gcc"
+					linker.executable = "x86_64-unknown-linux-gnu-gcc"
+				}
+			} else {
+				target("linux") {
+					cCompiler.executable = "gcc"
+				}
+			}
+
+			eachPlatform {
+				cCompiler.withArguments { args ->
+					args << "-std=gnu2x"
+					args << "-march=skylake"
+					args << "-g"
+					args << "-Wl,-z,relro"
+					args << "-Wl,-z,now"
+				}
+			}
+		}
+	}
+
+	platforms {
+		linux {
+			architecture "x86_64"
+			operatingSystem "linux"
+		}
+	}
+
+	components {
+		main(NativeLibrarySpec) {
+			targetPlatform "linux"
+		}
+	}
+
+	binaries {
+		all {
+			cCompiler.args "-g"
+		}
+	}
+}
+
+generateGrammarSource {
+	arguments += ['-package', 'ax.xz.fuzz.x86.parse']
+}

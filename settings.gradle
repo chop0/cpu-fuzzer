@@ -19,3 +19,6 @@ pluginManagement {
 		gradlePluginPortal()
 	}
 }
+
+include 'ax.xz.fuzz'
+include 'ax.xz.fuzz.x86'

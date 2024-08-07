@@ -1,0 +1,67 @@
+plugins {
+	id 'java'
+	id 'application'
+	id "io.github.krakowski.jextract" version "0.5.0"
+}
+
+group = 'ax.xz'
+version = '0.0.1'
+
+repositories {
+	mavenCentral()
+}
+
+application {
+	mainModule = 'ax.xz.fuzz'
+	mainClass = 'ax.xz.fuzz.Master'
+	applicationDefaultJvmArgs = ["--enable-preview", "-Djava.library.path=../ax.xz.fuzz.x86/build", "--enable-native-access=ax.xz.fuzz.x86,ax.xz.fuzz", "--add-opens=java.base/java.util=com.fasterxml.jackson.databind"]
+}
+
+java {
+	sourceCompatibility = "22.PREVIEW"
+	targetCompatibility = "22.PREVIEW"
+}
+
+tasks.withType(JavaCompile).each {
+	it.options.compilerArgs.add('--enable-preview')
+}
+
+dependencies {
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+	implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
+	implementation 'com.fasterxml.jackson.core:jackson-core:2.17.2'
+	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.2'
+
+	runtimeOnly(project(':ax.xz.fuzz.x86'))
+
+	runtimeOnly 'org.codehaus.woodstox:stax2-api:4.2.2'
+	runtimeOnly 'com.fasterxml.woodstox:woodstox-core:7.0.0'
+
+	implementation 'info.picocli:picocli:4.7.6'
+
+	testImplementation platform('org.junit:junit-bom:5.10.0')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+jextract {
+	header("${project.projectDir}/src/main/include/memory_util.h") {
+		targetPackage = 'ax.xz.fuzz.mman.gen'
+		className = "MmanNative"
+		functions = ['mmap', 'munmap']
+		constants = [
+			     'MAP_ANONYMOUS',
+			     'MAP_PRIVATE',
+			     'MAP_FIXED',
+			     'MAP_FAILED',
+
+			     'PROT_READ',
+			     'PROT_WRITE',
+			     'PROT_EXEC',
+		]
+	}
+}
+
+
+test {
+	useJUnitPlatform()
+}
