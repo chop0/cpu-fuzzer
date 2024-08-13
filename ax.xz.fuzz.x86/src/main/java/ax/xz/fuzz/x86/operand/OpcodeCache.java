@@ -31,6 +31,8 @@ import static com.github.icedland.iced.x86.Code.*;
 
 public record OpcodeCache(int version, Opcode[] opcodes) {
 	private static final Set<Integer> blacklistedOpcodes = Set.of(
+		CPUID, // rip :(
+		CMPSD_M32_M32,
 		BOUND_R16_M1616, BOUND_R32_M3232,
 		STOSB_M8_AL, STOSD_M32_EAX, STOSW_M16_AX, STOSQ_M64_RAX,
 		SCASB_AL_M8, SCASW_AX_M16, SCASD_EAX_M32, SCASQ_RAX_M64,
@@ -48,7 +50,7 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 		XRSTOR_MEM, XRSTORS_MEM, XRSTOR64_MEM, XRSTORS64_MEM,
 		RDPID_R32, RDPID_R64, RDPRU,
 		XSAVEOPT_MEM, XSAVEOPT64_MEM);
-	private static final List<String> disallowedPrefixes = List.of("PEXTR", "BT", "BND", "CCS", "MVEX", "KNC", "VIA", "XOP");
+	private static final List<String> disallowedPrefixes = List.of("MOVS", "CMPS", "PEXTR", "BT", "BND");
 
 	private static final int OPCODES_CACHE_VERSION = blacklistedOpcodes.hashCode() ^ disallowedPrefixes.hashCode();
 	private static final Path OPCODES_CACHE_PATH = Path.of("opcodes.json");

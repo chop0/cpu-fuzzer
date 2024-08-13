@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import java.util.zip.DataFormatException;
 
+import static ax.xz.fuzz.runtime.Config.defaultConfig;
 import static picocli.CommandLine.Command;
 import static picocli.CommandLine.Help.Visibility.ALWAYS;
 import static picocli.CommandLine.Option;
@@ -25,12 +26,26 @@ public class MinimiseCommand implements Callable<Void> {
 	@CommandLine.Parameters(showDefaultValue = ALWAYS, paramLabel = "<output>", description = "The file to write the minimised test case to")
 	public Path output;
 
+	@Option(showDefaultValue = ALWAYS, names = {"-b", "--branch-limit"}, description = "The number of branches a test case can take before it is forcibly terminated")
+	public int branchLimit = defaultConfig().branchLimit();
+
 
 	@Override
 	public Void call() throws IOException, DataFormatException {
 		var tc = RecordedTestCase.fromXML(Files.readString(file));
 
-		var tester = SequenceExecutor.forRecordedCase(Config.defaultConfig(), tc);
+		var defaultConfig = defaultConfig();
+		var config = new Config(
+			defaultConfig.mutators(),
+			defaultConfig.threadCount(),
+			defaultConfig.blockCount(),
+			defaultConfig.maxInstructionCount(),
+			branchLimit,
+			defaultConfig.counterRegister()
+		);
+
+		var tester = SequenceExecutor.forRecordedCase(config, tc);
+		System.out.println(tester.lookForMismatch(tc, attempts));
 
 		var minimiser = new Minimiser(tester, attempts);
 		tc = (RecordedTestCase)minimiser.minimise(tc);

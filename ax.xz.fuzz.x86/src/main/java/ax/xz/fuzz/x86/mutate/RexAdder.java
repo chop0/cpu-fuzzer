@@ -7,6 +7,7 @@ import ax.xz.fuzz.x86.arch.X86InstructionBuilder;
 import ax.xz.fuzz.x86.arch.X86Opcode;
 import ax.xz.fuzz.x86.arch.x86RegisterBanks;
 
+import java.util.Arrays;
 import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.x86.mutate.Encoding.isLegacyPrefix;
@@ -14,12 +15,8 @@ import static ax.xz.fuzz.x86.mutate.Encoding.isLegacyPrefix;
 public class RexAdder implements Mutator<X86Opcode, X86InstructionBuilder> {
 	@Override
 	public boolean appliesTo(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction) {
-		return Encoding.touches(instruction.instruction(), x86RegisterBanks.GPQ) || Encoding.usesVexEvex(instruction.instruction()); // only add if there's already a rex that'll take precedence
-	}
-
-	@Override
-	public boolean comesFrom(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction, DeferredMutation outcome) {
-		return outcome instanceof RexMutation;
+		return Arrays.stream(code.operands()).noneMatch(n -> n.counted()) ||
+		       Encoding.touches(instruction.instruction(), x86RegisterBanks.GPQ) || Encoding.usesVexEvex(instruction.instruction()); // only add if there's already a rex that'll take precedence
 	}
 
 	@Override

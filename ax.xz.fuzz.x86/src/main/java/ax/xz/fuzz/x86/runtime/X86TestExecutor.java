@@ -108,8 +108,8 @@ public class X86TestExecutor {
 			case x86RegisterBank _ when descriptor == RFLAGS -> saved_state.rflags$offset();
 
 			case GPRQ -> saved_state.layout().byteOffset(groupElement(descriptor.name().toLowerCase()));
-			case LOWER_ZMM -> saved_state.zmm$offset() + 64L * descriptor.indexWithinBank();
-			case UPPER_ZMM -> saved_state.zmm$offset() + 64L * (descriptor.indexWithinBank() + 16);
+			case LOWER_XMM, LOWER_YMM, LOWER_ZMM -> saved_state.zmm$offset() + 64L * descriptor.indexWithinBank();
+			case UPPER_XMM, UPPER_YMM, UPPER_ZMM -> saved_state.zmm$offset() + 64L * (descriptor.indexWithinBank() + 16);
 			case MMX -> saved_state.mm$offset() + 8L * descriptor.indexWithinBank();
 
 			default -> throw new IllegalStateException("Register not in saved state: " + descriptor);

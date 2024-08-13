@@ -12,37 +12,53 @@ import java.lang.foreign.MemorySegment;
 import java.util.ServiceLoader;
 
 public interface Architecture {
-	static Architecture getArchitecture() {
-		var loader = ServiceLoader.load(ArchitectureProvider.class);
-
-		for (var provider : loader) {
-			if (provider.isAvailable())
-				return provider.getArchitecture();
-		}
-
-		throw new UnsupportedOperationException("No available architecture");
-	}
-
 	RegisterDescriptor registerByIndex(int index);
+
 	RegisterDescriptor registerByName(String name);
+
 	RegisterSet trackedRegisters();
+
 	RegisterSet validRegisters();
 
 	RegisterSet[] subregisterSets();
+
 	Opcode[] allOpcodes();
 
 	RegisterDescriptor defaultCounter();
 
 	RegisterDescriptor stackPointer();
+
 	ExecutionResult runSegment(MemorySegment code, CPUState initialState);
 
 	BranchType unconditionalJump();
+
 	BranchType[] allBranchTypes();
 
 	Mutator[] allMutators();
 
 	int encode(ExecutableSequence sequence, MemorySegment code, Config config);
+
 	String disassemble(byte[] code);
 
 	boolean interestingMismatch(ExecutionResult a, ExecutionResult b);
+
+	static Architecture getArchitecture() {
+		class Holder {
+			static Architecture arch;
+
+			static {
+				var loader = ServiceLoader.load(ArchitectureProvider.class);
+
+				for (var provider : loader) {
+					if (provider.isAvailable())
+						Holder.arch = provider.getArchitecture();
+				}
+			}
+		}
+
+		if (Holder.arch != null)
+			return Holder.arch;
+		else
+			throw new UnsupportedOperationException("No available architecture");
+	}
 }

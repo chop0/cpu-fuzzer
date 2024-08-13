@@ -39,11 +39,6 @@ public class PrefixAdder implements Mutator<X86Opcode, X86InstructionBuilder> {
 	}
 
 	@Override
-	public boolean comesFrom(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction, DeferredMutation outcome) {
-		return outcome instanceof PrefixMutation;
-	}
-
-	@Override
 	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, X86InstructionBuilder instruction) {
 		int addedCount = rng.nextInt(4);
 		var prefixes = new ArrayList<AddedPrefix>(addedCount);

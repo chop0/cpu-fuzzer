@@ -52,6 +52,21 @@ public record X86UarchInfo(long supportedExtensions) {
 		return (supportedExtensions & X86UarchInfo.AVX512) != 0;
 	}
 
+	@Override
+	public String toString() {
+		var sb = new StringBuilder();
+
+		sb.append("Supported extensions: ");
+		if (supportsMMX()) sb.append("MMX ");
+		if (supportsSSE()) sb.append("SSE ");
+		if (supportsSSE2()) sb.append("SSE2 ");
+		if (supportsAVX()) sb.append("AVX ");
+		if (supportsAVX2()) sb.append("AVX2 ");
+		if (supportsAVX512()) sb.append("AVX512 ");
+
+		return sb.toString();
+	}
+
 	public static X86UarchInfo loadNativeInfo() {
 		long extensions = 0;
 

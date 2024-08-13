@@ -12,9 +12,10 @@ repositories {
 }
 
 application {
+	tasks.run.workingDir = rootProject.projectDir
 	mainModule = 'ax.xz.fuzz'
 	mainClass = 'ax.xz.fuzz.Master'
-	applicationDefaultJvmArgs = ["--enable-preview", "-Djava.library.path=../ax.xz.fuzz.x86/build", "--enable-native-access=ax.xz.fuzz.x86,ax.xz.fuzz", "--add-opens=java.base/java.util=com.fasterxml.jackson.databind"]
+	applicationDefaultJvmArgs = ["--enable-preview", "-Djava.library.path=ax.xz.fuzz.x86/build", "--enable-native-access=ax.xz.fuzz.x86,ax.xz.fuzz", "--add-opens=java.base/java.util=com.fasterxml.jackson.databind"]
 }
 
 java {

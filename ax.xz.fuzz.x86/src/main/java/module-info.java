@@ -9,6 +9,7 @@ module ax.xz.fuzz.x86 {
 	requires org.antlr.antlr4.runtime;
 
 	exports ax.xz.fuzz.x86.operand;
+	exports ax.xz.fuzz.x86.arch;
 
 	provides ArchitectureProvider with X86ArchitectureProvider;
 }

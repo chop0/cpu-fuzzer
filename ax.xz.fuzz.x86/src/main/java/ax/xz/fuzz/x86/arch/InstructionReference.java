@@ -50,6 +50,7 @@ public class InstructionReference {
 
 		s.put("ZEROUPPER", x86RegisterBanks.ZMM_AVX512.stream().map(ImplicitReg::new).toArray(Operand[]::new));
 		s.put("ZEROALL", x86RegisterBanks.ZMM_AVX512.stream().map(ImplicitReg::new).toArray(Operand[]::new));
+		s.put("SETGE", s.get("SETNL"));
 
 		suppressedOperands = Collections.unmodifiableMap(s);
 		System.out.println("Loaded " + suppressedOperands.size() + " suppressed operands");

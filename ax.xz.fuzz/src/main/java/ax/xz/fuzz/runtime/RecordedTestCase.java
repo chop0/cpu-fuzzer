@@ -1,23 +1,32 @@
 package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.arch.Branch;
+import ax.xz.fuzz.arch.BranchType;
 import ax.xz.fuzz.blocks.*;
 import ax.xz.fuzz.arch.CPUState;
+import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.util.StdConverter;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
@@ -68,8 +77,23 @@ public record RecordedTestCase(
 	}
 
 	public static RecordedTestCase fromXML(String xml) {
+		class BranchTypeDeserializer extends StdDeserializer<BranchType> {
+			protected BranchTypeDeserializer() {
+				super(BranchType.class);
+			}
+
+			@Override
+			public BranchType deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+				return p.readValueAs(getArchitecture().allBranchTypes()[0].getClass());
+			}
+
+		}
+
 		try {
 			var decoder = new XmlMapper();
+			var module = new SimpleModule();
+			module.addDeserializer(BranchType.class, new BranchTypeDeserializer());
+			decoder.registerModule(module);
 
 			return decoder.readValue(xml, RecordedTestCase.class);
 		} catch (Exception e) {

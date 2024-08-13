@@ -86,19 +86,25 @@ public class x86RegisterBanks {
 	public static RegisterSet XMM_AVX2 = withBanks(LOWER_XMM);
 	public static RegisterSet XMM_AVX512 = withBanks(UPPER_XMM);
 	public static RegisterSet YMM_AVX2 = withBanks(LOWER_YMM);
-	public static RegisterSet VECTOR_VEX = MM.union(XMM_AVX2).union(YMM_AVX2);
 
 	public static RegisterSet YMM_AVX512 = withBanks(LOWER_YMM, UPPER_YMM);
 	public static RegisterSet ZMM_VEX = withBanks(LOWER_ZMM);
 	public static RegisterSet ZMM_AVX512 = withBanks(LOWER_ZMM, UPPER_ZMM);
-	public static RegisterSet VECTOR_EVEX = MM.union(XMM_AVX512).union(YMM_AVX512).union(ZMM_AVX512);
 	public static RegisterSet TMM = withBanks(x86RegisterBank.TMM);
 	public static RegisterSet ST = withBanks(MMX);
 	public static RegisterSet MASK = withBanks(x86RegisterBank.MASK);
 	public static RegisterSet SEGMENT = withBanks(x86RegisterBank.SEGMENT);
 
-	public static RegisterSet ALL_AVX512 = GP.union(ST).union(VECTOR_EVEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
-	public static RegisterSet ALL_AVX2 = GP.union(VECTOR_VEX).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
+	private static RegisterSet SMALL_VECTOR_AVX2 = RegisterSet.of(
+			ZMM0, ZMM1, ZMM8, ZMM9
+			).stream().flatMap(r -> getAssociatedRegisters(r).stream()).collect(RegisterSet.collector());
+
+	private static RegisterSet SMALL_VECTOR_AVX512 = RegisterSet.of(
+		ZMM0, ZMM1, ZMM8, ZMM9, ZMM16, ZMM17
+	).stream().flatMap(r -> getAssociatedRegisters(r).stream()).collect(RegisterSet.collector());
+
+	public static RegisterSet ALL_AVX512 = GP.union(ST).union(MM).union(SMALL_VECTOR_AVX512).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
+	public static RegisterSet ALL_AVX2 = GP.union(SMALL_VECTOR_AVX2).union(MM).union(MASK).union(SEGMENT).union(SPECIAL).union(CR);
 
 	public static RegisterSet vector(int size, boolean hasEvexPrefix) {
 		return switch (size) {

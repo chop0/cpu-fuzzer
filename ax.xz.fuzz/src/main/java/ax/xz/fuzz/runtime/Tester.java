@@ -3,6 +3,7 @@ package ax.xz.fuzz.runtime;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.blocks.ProgramRandomiser;
 import ax.xz.fuzz.instruction.MemoryPartition;
+import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.instruction.StatusFlag;
 
@@ -55,7 +56,9 @@ public class Tester {
 		var registers = executor.legallyModifiableRegisters();
 		var flags = StatusFlag.all();
 
-		var partition = new ResourcePartition(flags, registers.subtract(config.counterRegister().related()), MemoryPartition.of(executor.primaryScratch()), executor.stack());
+		registers = registers.subtract(config.counterRegister().related());
+
+		var partition = new ResourcePartition(flags, registers, MemoryPartition.of(executor.primaryScratch()), executor.stack());
 		return new Tester(
 			executor,
 			new ProgramRandomiser(config),

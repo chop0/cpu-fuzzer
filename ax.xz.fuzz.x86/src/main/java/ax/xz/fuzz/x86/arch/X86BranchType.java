@@ -1,6 +1,7 @@
 package ax.xz.fuzz.x86.arch;
 
 import ax.xz.fuzz.arch.BranchType;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeLabel;
 
@@ -28,5 +29,10 @@ public enum X86BranchType implements BranchType  {
 
 	X86BranchType(BiConsumer<CodeAssembler, CodeLabel> perform) {
 		this.perform = perform;
+	}
+
+	@JsonCreator
+	public static X86BranchType fromString(String name) {
+		return valueOf(name);
 	}
 }

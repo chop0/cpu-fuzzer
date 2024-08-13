@@ -22,11 +22,6 @@ public class PrefixDuplicator implements Mutator<X86Opcode, X86InstructionBuilde
 		return true;
 	}
 
-	@Override
-	public boolean comesFrom(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction, DeferredMutation outcome) {
-		return outcome instanceof PrefixDupeMutation;
-	}
-
 	private boolean isRex(Instruction insn) {
 		for (int i = 0; i < insn.getOpCount(); i++) {
 			if (insn.getOpKind(i) == OpKind.REGISTER)

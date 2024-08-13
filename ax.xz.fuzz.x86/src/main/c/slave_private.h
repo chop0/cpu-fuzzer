@@ -13,7 +13,7 @@
 #define ALT_STACKS_BEGIN ((void *) 0xaf0000000)
 
 #define ALT_STACK_SIZE (1048576)
-#define TEST_CASE_TIMEOUT_NS (100000000)
+#define TEST_CASE_TIMEOUT_NS (1000000)
 
 #define thread_local _Thread_local
 

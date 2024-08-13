@@ -1,10 +1,10 @@
 package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.arch.Architecture;
+import ax.xz.fuzz.arch.CPUState;
 import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.instruction.RegisterSet;
-import ax.xz.fuzz.arch.CPUState;
 import ax.xz.fuzz.mman.MemoryUtils;
 
 import java.lang.foreign.Arena;
@@ -50,20 +50,6 @@ public class SequenceExecutor {
 		}
 	}
 
-	public SequenceResult runSequence(CPUState initialState, ExecutableSequence test) {
-		MemorySegment codeSlice = null;
-		try {
-			codeSlice = encode(test);
-		} catch (Block.UnencodeableException e) {
-			throw new RuntimeException(e);
-		}
-		formatMemory();
-
-		var result = architecture.runSegment(codeSlice, initialState);
-
-		return new SequenceResult(codeSlice, result);
-	}
-
 	public boolean lookForMismatch(TestCase tc, int attempts) {
 		var seqA = new ExecutableSequence(tc.blocksA(), tc.branches());
 		var seqB = new ExecutableSequence(tc.blocksB(), tc.branches());
@@ -81,13 +67,29 @@ public class SequenceExecutor {
 		return false;
 	}
 
+	public SequenceResult runSequence(CPUState initialState, ExecutableSequence test) {
+		MemorySegment codeSlice = null;
+		try {
+			codeSlice = encode(test);
+		} catch (Block.UnencodeableException e) {
+			throw new RuntimeException(e);
+		}
+		formatMemory();
+
+		var result = architecture.runSegment(codeSlice, initialState);
+
+		return new SequenceResult(codeSlice, result);
+	}
+
+	private MemorySegment encode(ExecutableSequence sequence) throws Block.UnencodeableException {
+		int codeLength = getArchitecture().encode(sequence, code, config);
+		return code.asSlice(0, codeLength);
+	}
+
 	private void formatMemory() {
 		for (int i = 0; i < resettableMemory.length; i++) {
 			var segment = resettableMemory[i];
-			if (memoryTemplate[i] != null)
-				memoryTemplate[i].copyFrom(segment);
-			else
-				segment.fill((byte) 0);
+			segment.fill((byte) 0);
 		}
 	}
 
@@ -97,7 +99,7 @@ public class SequenceExecutor {
 			serializedRegion[i] = SerialisedRegion.ofRegion(resettableMemory[i]);
 		}
 
-		return new RecordedTestCase(tc.initialState(), tc.a().blocks(), tc.b().blocks(),  code.address(), tc.branches(), serializedRegion);
+		return new RecordedTestCase(tc.initialState(), tc.a().blocks(), tc.b().blocks(), code.address(), tc.branches(), serializedRegion);
 	}
 
 	public RegisterSet legallyModifiableRegisters() {
@@ -110,11 +112,6 @@ public class SequenceExecutor {
 
 	public MemorySegment stack() {
 		return stack;
-	}
-
-	private MemorySegment encode(ExecutableSequence sequence) throws Block.UnencodeableException {
-		int codeLength = getArchitecture().encode(sequence, code, config);
-		return code.asSlice(0, codeLength);
 	}
 
 	public static SequenceExecutor create(Config config) {

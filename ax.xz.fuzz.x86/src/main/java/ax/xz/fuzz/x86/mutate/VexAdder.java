@@ -24,11 +24,6 @@ public class VexAdder implements Mutator<X86Opcode, X86InstructionBuilder> {
 	}
 
 	@Override
-	public boolean comesFrom(ResourcePartition rp, X86Opcode code, X86InstructionBuilder instruction, DeferredMutation outcome) {
-		return outcome instanceof VexMutation;
-	}
-
-	@Override
 	public DeferredMutation select(RandomGenerator rng, ResourcePartition rp, X86InstructionBuilder instruction) {
 		return new VexMutation((byte) rng.nextInt(), (byte) rng.nextInt(), rng.nextBoolean(), rng.nextBoolean());
 	}

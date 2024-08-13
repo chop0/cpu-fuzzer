@@ -51,8 +51,7 @@ public class ProgramRandomiser {
 			else if (reg.widthBytes() == 8) {
 				map.put(reg, ByteBuffer.allocate(8).order(nativeOrder())
 					.putLong(selectInterestingValue(rng, rp)).array());
-			}
-			else {
+			} else {
 				byte[] bytes = new byte[reg.widthBytes()];
 				rng.nextBytes(bytes);
 				map.put(reg, bytes);
@@ -71,6 +70,7 @@ public class ProgramRandomiser {
 			try {
 				return rp.selectAddress(rng, MEMORY_GRANULARITY, MEMORY_GRANULARITY, 8);
 			} catch (NoPossibilitiesException e) {
+				throw new AssertionError(e);
 			}
 
 		return rng.nextLong();
@@ -124,7 +124,7 @@ public class ProgramRandomiser {
 
 	public Branch selectBranch(RandomGenerator rng) {
 		var branchTypes = getArchitecture().allBranchTypes();
-		var type = branchTypes[rng.nextInt(branchTypes.length)];
+		var type = branchTypes[rng.nextInt(branchTypes.length - 1)];
 		int taken = rng.nextInt(config.blockCount() + 1); // + 1 because the last block is the exit block
 		int notTaken = rng.nextInt(config.blockCount() + 1);
 

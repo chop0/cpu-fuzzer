@@ -12,6 +12,7 @@ import ax.xz.fuzz.runtime.ExecutableSequence;
 import ax.xz.fuzz.runtime.ExecutionResult;
 import ax.xz.fuzz.x86.mutate.PrefixAdder;
 import ax.xz.fuzz.x86.mutate.PrefixDuplicator;
+import ax.xz.fuzz.x86.mutate.RexAdder;
 import ax.xz.fuzz.x86.operand.OpcodeCache;
 import ax.xz.fuzz.x86.runtime.X86TestExecutor;
 import com.github.icedland.iced.x86.ICRegister;
@@ -19,6 +20,10 @@ import com.github.icedland.iced.x86.asm.AsmRegister64;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeAssemblerResult;
 import com.github.icedland.iced.x86.asm.CodeLabel;
+import com.github.icedland.iced.x86.dec.ByteArrayCodeReader;
+import com.github.icedland.iced.x86.dec.Decoder;
+import com.github.icedland.iced.x86.fmt.StringOutput;
+import com.github.icedland.iced.x86.fmt.nasm.NasmFormatter;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
@@ -76,7 +81,7 @@ public class X86Architecture implements Architecture {
 
 	@Override
 	public RegisterSet[] subregisterSets() {
-		return new RegisterSet[0];
+		return bankSets;
 	}
 
 	public Opcode[] allOpcodes() {
@@ -112,7 +117,7 @@ public class X86Architecture implements Architecture {
 	public Mutator[] allMutators() {
 		return new Mutator[] {
 			new PrefixAdder(),
-			// new RexAdder(), // TODO: fix
+			new RexAdder(), // TODO: fix
 			// new VexAdder(),
 			new PrefixDuplicator()
 		};
@@ -180,7 +185,17 @@ public class X86Architecture implements Architecture {
 
 	@Override
 	public String disassemble(byte[] code) {
-		return "";
+		ByteArrayCodeReader reader = new ByteArrayCodeReader(code);
+		Decoder decoder = new Decoder(64, reader);
+
+		var formatter = new NasmFormatter();
+		var output = new StringOutput();
+
+		for (var instruction : decoder) {
+			formatter.format(instruction, output);
+		}
+
+		return output.toString();
 	}
 
 	@Override
@@ -189,8 +204,7 @@ public class X86Architecture implements Architecture {
 			CPUState(var B)
 		)) {
 			for (var l : A.keySet()) {
-				if (((x86RegisterDescriptor) l).bank() != x86RegisterBank.SPECIAL
-				    && !Arrays.equals(A.get(l), B.get(l))) {
+				if (!Arrays.equals(A.get(l), B.get(l))) {
 					return true;
 				}
 			}
@@ -208,6 +222,11 @@ public class X86Architecture implements Architecture {
 	}
 
 	private static final class InstanceHolder {
-		private static final X86Architecture INSTANCE = new X86Architecture(X86UarchInfo.loadNativeInfo());
+		private static final X86Architecture INSTANCE;
+
+		static {
+			INSTANCE = new X86Architecture(X86UarchInfo.loadNativeInfo());
+			System.out.println("Loaded local uarch: " + INSTANCE.uarchInfo);
+		}
 	}
 }

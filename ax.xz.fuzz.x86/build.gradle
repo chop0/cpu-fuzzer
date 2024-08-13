@@ -59,6 +59,7 @@ jextract {
 
 def copyX86SharedLibrary = tasks.register("makeX86SharedLibrary") {
 	def sharedFile = tasks.linkMainSharedLibrary.outputs.files.filter { it.name.contains("libmain.so") }.singleFile
+	dependsOn(tasks.linkMainSharedLibrary)
 	inputs.file(sharedFile)
 	outputs.file("${project.layout.buildDirectory.asFile.get().toPath()}/libmain.so")
 
