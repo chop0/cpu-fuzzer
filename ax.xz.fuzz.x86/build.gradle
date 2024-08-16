@@ -1,8 +1,6 @@
 plugins {
 	id 'java-library'
-	id 'antlr'
 
-	id "io.github.krakowski.jextract" version "0.5.0"
 	id 'c'
 	id 'assembler'
 }
@@ -15,16 +13,10 @@ repositories {
 }
 
 dependencies {
-	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
-	implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
-	implementation 'com.fasterxml.jackson.core:jackson-core:2.17.2'
-	implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.17.2'
-
-	implementation project(':ax.xz.fuzz')
-	antlr "org.antlr:antlr4:4.13.1"
-	implementation 'org.antlr:antlr4:4.13.1'
-
 	implementation 'io.github.icedland.iced:iced-x86:1.21.0'
+	implementation project(':ax.xz.fuzz')
+	implementation project(':ax.xz.fuzz.x86.arch')
+	implementation project(':ax.xz.xed')
 
 	testImplementation platform('org.junit:junit-bom:5.10.0')
 	testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -32,6 +24,14 @@ dependencies {
 
 test {
 	useJUnitPlatform()
+}
+
+sourceSets {
+	main {
+		resources {
+			srcDir "${buildDir}/generated/binaries"
+		}
+	}
 }
 
 jextract {
@@ -61,7 +61,7 @@ def copyX86SharedLibrary = tasks.register("makeX86SharedLibrary") {
 	def sharedFile = tasks.linkMainSharedLibrary.outputs.files.filter { it.name.contains("libmain.so") }.singleFile
 	dependsOn(tasks.linkMainSharedLibrary)
 	inputs.file(sharedFile)
-	outputs.file("${project.layout.buildDirectory.asFile.get().toPath()}/libmain.so")
+	outputs.file("${buildDir}/generated/binaries/lib/libmain.so")
 
 	doLast {
 		copy {
@@ -121,8 +121,4 @@ model {
 			cCompiler.args "-g"
 		}
 	}
-}
-
-generateGrammarSource {
-	arguments += ['-package', 'ax.xz.fuzz.x86.parse']
 }

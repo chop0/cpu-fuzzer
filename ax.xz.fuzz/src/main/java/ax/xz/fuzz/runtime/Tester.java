@@ -3,14 +3,13 @@ package ax.xz.fuzz.runtime;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 import ax.xz.fuzz.blocks.ProgramRandomiser;
 import ax.xz.fuzz.instruction.MemoryPartition;
-import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.instruction.StatusFlag;
 
 import java.util.SplittableRandom;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.nativeArch;
 
 public class Tester {
 	private final SequenceExecutor executor;
@@ -46,14 +45,15 @@ public class Tester {
 
 	public record TestResult(ExecutionResult a, ExecutionResult b, InvarianceTestCase tc) {
 		public boolean hasInterestingMismatch() {
-			return getArchitecture().interestingMismatch(a, b);
+			return nativeArch().interestingMismatch(a, b);
 		}
 	}
 
 	public static Tester create(Config config) {
 		var executor = SequenceExecutor.create(config);
+		var arch = nativeArch();
 
-		var registers = executor.legallyModifiableRegisters();
+		var registers = arch.validRegisters();
 		var flags = StatusFlag.all();
 
 		registers = registers.subtract(config.counterRegister().related());

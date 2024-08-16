@@ -4,7 +4,6 @@ import ax.xz.fuzz.arch.Branch;
 import ax.xz.fuzz.arch.BranchType;
 import ax.xz.fuzz.blocks.*;
 import ax.xz.fuzz.arch.CPUState;
-import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -24,14 +23,12 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.nativeArch;
 import static ax.xz.fuzz.mman.MemoryUtils.Protection.*;
 import static ax.xz.fuzz.mman.MemoryUtils.mmap;
 
@@ -84,7 +81,7 @@ public record RecordedTestCase(
 
 			@Override
 			public BranchType deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-				return p.readValueAs(getArchitecture().allBranchTypes()[0].getClass());
+				return p.readValueAs(nativeArch().allBranchTypes()[0].getClass());
 			}
 
 		}
@@ -173,7 +170,7 @@ public record RecordedTestCase(
 					for (var item : value.items()) {
 						var bytes = item.encode(0);
 						var insn = instructions.addObject();
-						insn.put("mnemonic", getArchitecture().disassemble(bytes));
+						insn.put("mnemonic", nativeArch().disassemble(bytes));
 
 						StringBuilder code = new StringBuilder();
 						for (var b : bytes) {

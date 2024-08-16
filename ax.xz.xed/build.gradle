@@ -1,0 +1,32 @@
+plugins {
+    id 'java'
+	id "io.github.krakowski.jextract" version "0.5.0"
+}
+
+group = 'ax.xz'
+version = '0.0.1'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+jextract {
+	header("${project.projectDir}/src/main/headers/xed/xed-interface.h") {
+		targetPackage = 'ax.xz.xed'
+		className = "xed"
+	}
+
+	header("${project.projectDir}/src/main/headers/xed/xed-internal-header.h") {
+		targetPackage = 'ax.xz.xed'
+		className = "xed_internal"
+	}
+}
+
+test {
+    useJUnitPlatform()
+}

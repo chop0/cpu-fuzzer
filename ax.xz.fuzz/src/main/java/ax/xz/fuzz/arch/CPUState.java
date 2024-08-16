@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.nativeArch;
 
 @JsonSerialize(using = CPUState.CPUStateSerializer.class)
 @JsonDeserialize(using = CPUState.CPUStateDeserializer.class)
@@ -117,9 +117,9 @@ public record CPUState( Map<RegisterDescriptor, byte[]> values) {
 			Iterator<Map.Entry<String, JsonNode>> fields = rootNode.fields();
 			while (fields.hasNext()) {
 				Map.Entry<String, JsonNode> field = fields.next();
-				RegisterDescriptor rd = getArchitecture().registerByName(field.getKey());
+				RegisterDescriptor rd = nativeArch().registerByName(field.getKey());
 
-				if (!getArchitecture().trackedRegisters().hasRegister(rd))
+				if (!nativeArch().trackedRegisters().hasRegister(rd))
 					continue;
 
 				byte[] data = hexStringToByteArray(field.getValue().asText());

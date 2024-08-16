@@ -18,7 +18,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.StructuredTaskScope;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.nativeArch;
 import static ax.xz.fuzz.runtime.Config.defaultConfig;
 import static java.nio.ByteOrder.nativeOrder;
 import static picocli.CommandLine.Command;
@@ -73,7 +73,7 @@ public class FuzzCommand implements Callable<Void> {
 	@Override
 	public Void call() throws IOException, ExecutionException {
 		// TODO: configure mutators from command line
-		var config = new Config(getArchitecture().allMutators(), threadCount, blockCount, maxInstructionCount, branchLimit,  getArchitecture().defaultCounter());
+		var config = new Config(nativeArch().allMutators(), threadCount, blockCount, maxInstructionCount, branchLimit,  nativeArch().defaultCounter());
 
 		var host = new InetSocketAddress(metricsHost, metricsPort);
 

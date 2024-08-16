@@ -1,7 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Master" type="Application" factoryName="Application" nameIsGenerated="true">
     <option name="MAIN_CLASS_NAME" value="ax.xz.fuzz.Master" />
-    <module name="cpu-fuzzer.main" />
     <projectPathOnTarget name="projectPathOnTarget" value="/home/apetri/cpu-fuzzer" />
     <target name="apetri@unicorn:22" />
     <option name="VM_PARAMETERS" value="-Djava.library.path=/home/apetri/cpu-fuzzer/" />

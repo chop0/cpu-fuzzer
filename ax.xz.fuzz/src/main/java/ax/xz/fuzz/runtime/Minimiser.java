@@ -7,7 +7,7 @@ import ax.xz.fuzz.blocks.InvarianceTestCase;
 
 import java.util.*;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.nativeArch;
 
 public class Minimiser {
 	private final SequenceExecutor executor;
@@ -66,7 +66,7 @@ public class Minimiser {
 	private boolean simplifyBranch(TestCase tc, int branchIndex) {
 		int end = tc.blocksA().length;
 		var oldBranch = tc.branches()[branchIndex];
-		var jmp = getArchitecture().unconditionalJump();
+		var jmp = nativeArch().unconditionalJump();
 
 		tc.branches()[branchIndex] = new Branch(jmp, end, end);
 		if (!tc.branches()[branchIndex].equals(oldBranch) && executor.lookForMismatch(tc, attempts)) {

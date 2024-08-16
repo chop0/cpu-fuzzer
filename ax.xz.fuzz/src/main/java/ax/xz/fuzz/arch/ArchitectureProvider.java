@@ -1,6 +1,6 @@
 package ax.xz.fuzz.arch;
 
 public interface ArchitectureProvider {
-	    Architecture getArchitecture();
+	    Architecture nativeArchitecture();
 	    boolean isAvailable();
 }
