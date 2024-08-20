@@ -12,7 +12,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.arch.Architecture.nativeArch;
+import static ax.xz.fuzz.arch.Architecture.getArchitecture;
 import static java.nio.ByteOrder.nativeOrder;
 
 public class ProgramRandomiser {
@@ -42,10 +42,10 @@ public class ProgramRandomiser {
 		var master = split.master();
 
 		var map = new HashMap<RegisterDescriptor, byte[]>();
-		for (var reg : nativeArch().trackedRegisters().intersection(master.allowedRegisters())) {
+		for (var reg : getArchitecture().trackedRegisters().intersection(master.allowedRegisters())) {
 			var rp = a.allowedRegisters().hasRegister(reg) ? a : b;
 
-			if (reg == nativeArch().stackPointer())
+			if (reg ==  getArchitecture().stackPointer())
 				map.put(reg, ByteBuffer.allocate(8).order(nativeOrder())
 					.putLong(master.stack().address() + master.stack().byteSize()/2).array());
 			else if (reg.widthBytes() == 8) {
@@ -123,7 +123,7 @@ public class ProgramRandomiser {
 	}
 
 	public Branch selectBranch(RandomGenerator rng) {
-		var branchTypes = nativeArch().allBranchTypes();
+		var branchTypes = getArchitecture().allBranchTypes();
 		var type = branchTypes[rng.nextInt(branchTypes.length - 1)];
 		int taken = rng.nextInt(config.blockCount() + 1); // + 1 because the last block is the exit block
 		int notTaken = rng.nextInt(config.blockCount() + 1);
@@ -144,7 +144,7 @@ public class ProgramRandomiser {
 		var rhsRegisters = RegisterSet.of();
 
 		var universe = master.allowedRegisters();
-		for (var bank : nativeArch().subregisterSets()) {
+		for (var bank : getArchitecture().subregisterSets()) {
 			if (rng.nextBoolean())
 				lhsRegisters = lhsRegisters.union(bank.intersection(universe));
 			else
@@ -157,7 +157,7 @@ public class ProgramRandomiser {
 
 		var memorySplit = selectMemorySplit(master);
 
-		var sp =  nativeArch().stackPointer();
+		var sp =  getArchitecture().stackPointer();
 		return new ResourceSplit(
 			new ResourcePartition(lhsFlags, lhsRegisters, memorySplit.getKey(), lhsRegisters.hasRegister(sp) ? master.stack() : MemorySegment.NULL),
 			new ResourcePartition(EnumSet.complementOf(lhsFlags), rhsRegisters, memorySplit.getValue(), rhsRegisters.hasRegister(sp) ? master.stack() : MemorySegment.NULL),
@@ -186,7 +186,7 @@ public class ProgramRandomiser {
 	}
 
 	public BlockEntry.FuzzEntry selectBlockEntry(RandomGenerator rng, ResourcePartition partition) {
-		var opc = nativeArch().allOpcodes();
+		var opc = getArchitecture().allOpcodes();
 
 		for (; ; ) {
 			var variant = opc[rng.nextInt(opc.length)];

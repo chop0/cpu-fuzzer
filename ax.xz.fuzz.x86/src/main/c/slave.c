@@ -307,6 +307,7 @@ void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 
 	__save_segment_registers(my_thread_idx);
 
+	trampoline_entrypoint_t *entrypoint = TRAMPOLINE_ENTRYPOINT(my_thread_idx);
 	active_thread_info[my_thread_idx].faulted = false;
 
 	*(uint64_t volatile*) debug_file_address = code_length;
@@ -314,7 +315,6 @@ void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 
 	__timer_arm();
    	if (sigsetjmp(active_thread_info[my_thread_idx].jmpbuf, 1) == 0) {
-   		trampoline_entrypoint_t *entrypoint = TRAMPOLINE_ENTRYPOINT(my_thread_idx);
    		entrypoint(code, &output->state);
    		siglongjmp(active_thread_info[my_thread_idx].jmpbuf, 1);
 	}

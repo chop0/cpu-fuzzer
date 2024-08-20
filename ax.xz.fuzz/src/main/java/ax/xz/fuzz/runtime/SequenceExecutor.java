@@ -4,6 +4,7 @@ import ax.xz.fuzz.arch.Architecture;
 import ax.xz.fuzz.arch.CPUState;
 import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
+import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.mman.MemoryUtils;
 
 import java.lang.foreign.Arena;
@@ -12,16 +13,14 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.zip.DataFormatException;
 
-import static ax.xz.fuzz.arch.Architecture.nativeArch;
+import static ax.xz.fuzz.arch.Architecture.getArchitecture;
 import static ax.xz.fuzz.mman.MemoryUtils.Protection.*;
 import static ax.xz.fuzz.runtime.RecordedTestCase.SerialisedRegion;
-import static ax.xz.fuzz.runtime.SegmentExecutor.nativeExecutor;
 
 public class SequenceExecutor {
 	private final Arena arena;
 
 	private final Architecture architecture;
-	private final SegmentExecutor segmentExecutor;
 
 	private final MemorySegment primaryScratch;
 	private final MemorySegment stack;
@@ -33,10 +32,9 @@ public class SequenceExecutor {
 
 	private final Config config;
 
-	public SequenceExecutor(Arena arena, Architecture architecture, SegmentExecutor segmentExecutor, MemorySegment primaryScratch, MemorySegment stack, Config config, MemorySegment code, MemorySegment[] resettableMemory, MemorySegment[] memoryTemplate) {
+	public SequenceExecutor(Arena arena, Architecture architecture, MemorySegment primaryScratch, MemorySegment stack, Config config, MemorySegment code, MemorySegment[] resettableMemory, MemorySegment[] memoryTemplate) {
 		this.arena = arena;
 		this.architecture = architecture;
-		this.segmentExecutor = segmentExecutor;
 		this.primaryScratch = primaryScratch;
 		this.stack = stack;
 		this.code = code;
@@ -61,7 +59,7 @@ public class SequenceExecutor {
 		for (int i = 0; i < attempts; i++) {
 			var result2 = runSequence(tc.initialState(), seqB).result();
 
-			if (!lastResult.equals(result2)) {
+			if (architecture.interestingMismatch(lastResult, result2)) {
 				return true;
 			}
 		}
@@ -78,13 +76,13 @@ public class SequenceExecutor {
 		}
 		formatMemory();
 
-		var result = segmentExecutor.runCode(codeSlice, initialState);
+		var result = architecture.runSegment(codeSlice, initialState);
 
 		return new SequenceResult(codeSlice, result);
 	}
 
 	private MemorySegment encode(ExecutableSequence sequence) throws Block.UnencodeableException {
-		int codeLength = architecture.encode(sequence, segmentExecutor.okExitAddress(), code, config);
+		int codeLength = getArchitecture().encode(sequence, code, config);
 		return code.asSlice(0, codeLength);
 	}
 
@@ -102,6 +100,10 @@ public class SequenceExecutor {
 		}
 
 		return new RecordedTestCase(tc.initialState(), tc.a().blocks(), tc.b().blocks(), code.address(), tc.branches(), serializedRegion);
+	}
+
+	public RegisterSet legallyModifiableRegisters() {
+		return architecture.validRegisters();
 	}
 
 	public MemorySegment primaryScratch() {
@@ -142,7 +144,7 @@ public class SequenceExecutor {
 		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
 		var stack = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x6a30000 + index * 4096L * 16 * 2), 4096, READ, WRITE, EXECUTE);
 
-		return new SequenceExecutor(arena, nativeArch(), nativeExecutor(), scratch, stack, config, code, new MemorySegment[]{scratch, stack}, new MemorySegment[]{null, null});
+		return new SequenceExecutor(arena, getArchitecture(), scratch, stack, config, code, new MemorySegment[]{scratch, stack}, new MemorySegment[]{null, null});
 	}
 
 	public static SequenceExecutor forRecordedCase(Config config, RecordedTestCase rtc) throws DataFormatException {
@@ -160,7 +162,7 @@ public class SequenceExecutor {
 
 		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(rtc.codeLocation()), 4096 * 16, READ, WRITE, EXECUTE);
 
-		return new SequenceExecutor(arena, nativeArch(), nativeExecutor(), null, null, config, code, scratchRegions, templateRegions);
+		return new SequenceExecutor(arena, getArchitecture(), null, null, config, code, scratchRegions, templateRegions);
 	}
 
 	public record SequenceResult(MemorySegment codeSlice, ExecutionResult result) {

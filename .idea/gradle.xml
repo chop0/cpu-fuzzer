@@ -4,16 +4,12 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <option name="delegatedBuild" value="false" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/ax.xz.fuzz" />
-            <option value="$PROJECT_DIR$/ax.xz.fuzz.compiler" />
             <option value="$PROJECT_DIR$/ax.xz.fuzz.x86" />
-            <option value="$PROJECT_DIR$/ax.xz.fuzz.x86.arch" />
-            <option value="$PROJECT_DIR$/ax.xz.xed" />
           </set>
         </option>
       </GradleProjectSettings>

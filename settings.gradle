@@ -22,7 +22,3 @@ pluginManagement {
 
 include 'ax.xz.fuzz'
 include 'ax.xz.fuzz.x86'
-include 'ax.xz.fuzz.x86.arch'
-include 'ax.xz.fuzz.compiler'
-include 'ax.xz.xed'
-

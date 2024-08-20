@@ -28,19 +28,21 @@ public interface Architecture {
 
 	RegisterDescriptor stackPointer();
 
+	ExecutionResult runSegment(MemorySegment code, CPUState initialState);
+
 	BranchType unconditionalJump();
 
 	BranchType[] allBranchTypes();
 
 	Mutator[] allMutators();
 
-	int encode(ExecutableSequence sequence, long exitAddress, MemorySegment code, Config config);
+	int encode(ExecutableSequence sequence, MemorySegment code, Config config);
 
 	String disassemble(byte[] code);
 
 	boolean interestingMismatch(ExecutionResult a, ExecutionResult b);
 
-	static Architecture nativeArch() {
+	static Architecture getArchitecture() {
 		class Holder {
 			static Architecture arch;
 
@@ -49,7 +51,7 @@ public interface Architecture {
 
 				for (var provider : loader) {
 					if (provider.isAvailable())
-						Holder.arch = provider.nativeArchitecture();
+						Holder.arch = provider.getArchitecture();
 				}
 			}
 		}

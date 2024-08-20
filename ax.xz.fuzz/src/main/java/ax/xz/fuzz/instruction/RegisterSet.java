@@ -9,7 +9,7 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static ax.xz.fuzz.arch.Architecture.nativeArch;
+import static ax.xz.fuzz.arch.Architecture.getArchitecture;
 
 public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	public static RegisterSet EMPTY = new RegisterSet(new BitSet());
@@ -109,7 +109,7 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 			currentIndex = registers.nextSetBit(currentIndex + 1);
 		}
 
-		return nativeArch().registerByIndex(currentIndex);
+		return getArchitecture().registerByIndex(currentIndex);
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {
@@ -121,15 +121,15 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	}
 
 	public Stream<RegisterDescriptor> stream() {
-		return registers.stream().mapToObj(n -> nativeArch().registerByIndex(n));
+		return registers.stream().mapToObj(n -> getArchitecture().registerByIndex(n));
 	}
 
 	public RegisterDescriptor first() {
-		return nativeArch().registerByIndex(registers.nextSetBit(0));
+		return getArchitecture().registerByIndex(registers.nextSetBit(0));
 	}
 
 	public RegisterDescriptor last() {
-		return nativeArch().registerByIndex(registers.previousSetBit(registers.length() - 1));
+		return getArchitecture().registerByIndex(registers.previousSetBit(registers.length() - 1));
 	}
 
 	@Override
@@ -149,7 +149,7 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	public String toString() {
 		return registers.stream()
 			.sorted()
-			.mapToObj(nativeArch()::registerByIndex)
+			.mapToObj(getArchitecture()::registerByIndex)
 			.map(n -> n.toString())
 			.collect(Collectors.joining(", ", "{", "}"));
 	}
@@ -166,6 +166,6 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 		if (this == EMPTY)
 			return Stream.<RegisterDescriptor>empty().iterator();
 
-		return registers.stream().mapToObj(nativeArch()::registerByIndex).iterator();
+		return registers.stream().mapToObj(getArchitecture()::registerByIndex).iterator();
 	}
 }

@@ -16,5 +16,4 @@ module ax.xz.fuzz {
 	exports ax.xz.fuzz to info.picocli;
 
 	uses ax.xz.fuzz.arch.ArchitectureProvider;
-	uses ax.xz.fuzz.runtime.SegmentExecutor.Provider;
 }
