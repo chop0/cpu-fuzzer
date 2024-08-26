@@ -1,10 +1,9 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.arch.Branch;
-import ax.xz.fuzz.arch.BranchType;
+import ax.xz.fuzz.arch.BlockEdge;
+import ax.xz.fuzz.arch.BranchDescription;
 import ax.xz.fuzz.blocks.*;
 import ax.xz.fuzz.arch.CPUState;
-import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -24,14 +23,12 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 import static ax.xz.fuzz.mman.MemoryUtils.Protection.*;
 import static ax.xz.fuzz.mman.MemoryUtils.mmap;
 
@@ -46,7 +43,7 @@ public record RecordedTestCase(
 	@JacksonXmlElementWrapper(useWrapping = false)
 	Block[] code2,
 	long codeLocation,
-	Branch[] branches,
+	BlockEdge[] blockEdges,
 	SerialisedRegion... memory
 ) implements TestCase {
 	public RecordedTestCase {
@@ -77,14 +74,14 @@ public record RecordedTestCase(
 	}
 
 	public static RecordedTestCase fromXML(String xml) {
-		class BranchTypeDeserializer extends StdDeserializer<BranchType> {
+		class BranchTypeDeserializer extends StdDeserializer<BranchDescription> {
 			protected BranchTypeDeserializer() {
-				super(BranchType.class);
+				super(BranchDescription.class);
 			}
 
 			@Override
-			public BranchType deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-				return p.readValueAs(getArchitecture().allBranchTypes()[0].getClass());
+			public BranchDescription deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
+				return p.readValueAs(activeArchitecture().unconditionalJump().getClass());
 			}
 
 		}
@@ -92,7 +89,7 @@ public record RecordedTestCase(
 		try {
 			var decoder = new XmlMapper();
 			var module = new SimpleModule();
-			module.addDeserializer(BranchType.class, new BranchTypeDeserializer());
+			module.addDeserializer(BranchDescription.class, new BranchTypeDeserializer());
 			decoder.registerModule(module);
 
 			return decoder.readValue(xml, RecordedTestCase.class);
@@ -173,7 +170,7 @@ public record RecordedTestCase(
 					for (var item : value.items()) {
 						var bytes = item.encode(0);
 						var insn = instructions.addObject();
-						insn.put("mnemonic", getArchitecture().disassemble(bytes));
+						insn.put("mnemonic", activeArchitecture().disassemble(bytes));
 
 						StringBuilder code = new StringBuilder();
 						for (var b : bytes) {

@@ -13,7 +13,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.zip.DataFormatException;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 import static ax.xz.fuzz.mman.MemoryUtils.Protection.*;
 import static ax.xz.fuzz.runtime.RecordedTestCase.SerialisedRegion;
 
@@ -51,8 +51,8 @@ public class SequenceExecutor {
 	}
 
 	public boolean lookForMismatch(TestCase tc, int attempts) {
-		var seqA = new ExecutableSequence(tc.blocksA(), tc.branches());
-		var seqB = new ExecutableSequence(tc.blocksB(), tc.branches());
+		var seqA = new ExecutableSequence(tc.blocksA(), tc.blockEdges());
+		var seqB = new ExecutableSequence(tc.blocksB(), tc.blockEdges());
 
 		ExecutionResult lastResult = runSequence(tc.initialState(), seqA).result();
 
@@ -82,7 +82,7 @@ public class SequenceExecutor {
 	}
 
 	private MemorySegment encode(ExecutableSequence sequence) throws Block.UnencodeableException {
-		int codeLength = getArchitecture().encode(sequence, code, config);
+		int codeLength = activeArchitecture().encode(sequence, code, config);
 		return code.asSlice(0, codeLength);
 	}
 
@@ -99,7 +99,7 @@ public class SequenceExecutor {
 			serializedRegion[i] = SerialisedRegion.ofRegion(resettableMemory[i]);
 		}
 
-		return new RecordedTestCase(tc.initialState(), tc.a().blocks(), tc.b().blocks(), code.address(), tc.branches(), serializedRegion);
+		return new RecordedTestCase(tc.initialState(), tc.a().blocks(), tc.b().blocks(), code.address(), tc.blockEdges(), serializedRegion);
 	}
 
 	public RegisterSet legallyModifiableRegisters() {
@@ -144,7 +144,7 @@ public class SequenceExecutor {
 		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x1310000 + index * 4096L * 16 * 2), 4096 * 16, READ, WRITE, EXECUTE);
 		var stack = MemoryUtils.mmap(arena, MemorySegment.ofAddress(0x6a30000 + index * 4096L * 16 * 2), 4096, READ, WRITE, EXECUTE);
 
-		return new SequenceExecutor(arena, getArchitecture(), scratch, stack, config, code, new MemorySegment[]{scratch, stack}, new MemorySegment[]{null, null});
+		return new SequenceExecutor(arena, activeArchitecture(), scratch, stack, config, code, new MemorySegment[]{scratch, stack}, new MemorySegment[]{null, null});
 	}
 
 	public static SequenceExecutor forRecordedCase(Config config, RecordedTestCase rtc) throws DataFormatException {
@@ -162,7 +162,7 @@ public class SequenceExecutor {
 
 		var code = MemoryUtils.mmap(arena, MemorySegment.ofAddress(rtc.codeLocation()), 4096 * 16, READ, WRITE, EXECUTE);
 
-		return new SequenceExecutor(arena, getArchitecture(), null, null, config, code, scratchRegions, templateRegions);
+		return new SequenceExecutor(arena, activeArchitecture(), null, null, config, code, scratchRegions, templateRegions);
 	}
 
 	public record SequenceResult(MemorySegment codeSlice, ExecutionResult result) {

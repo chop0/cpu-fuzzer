@@ -1,0 +1,107 @@
+plugins {
+	id 'java'
+	id "io.github.krakowski.jextract" version "0.5.0"
+	id 'c'
+	id 'assembler'
+}
+
+group = 'ax.xz'
+version = '0.0.1'
+
+java {
+	sourceCompatibility = "22.PREVIEW"
+	targetCompatibility = "22.PREVIEW"
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation project(':ax.xz.fuzz')
+
+	testImplementation platform('org.junit:junit-bom:5.10.0')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+test {
+	useJUnitPlatform()
+}
+
+jextract {
+	header("${project.projectDir}/src/main/headers/slave.h") {
+		libraries = ['slave']
+		targetPackage = 'ax.xz.fuzz.x86.tester'
+		className = "slave_h"
+		functions = ['trampoline_return_address', 'maybe_allocate_signal_stack', 'do_test']
+		constants = ['ILL_ILLOPC',
+			     'ILL_ILLOPN',
+			     'ILL_ILLADR',
+			     'ILL_ILLTRP',
+			     'ILL_PRVOPC',
+			     'ILL_PRVREG',
+			     'ILL_COPROC',
+			     'ILL_BADSTK'
+		]
+		useSystemLoadLibrary = true
+		libraries = ['main']
+
+		variables = ['routine_begin', 'routine_end']
+		structs = ['fault_details', 'execution_result', 'saved_state']
+	}
+}
+
+def copyRiscv64SharedLibrary = tasks.register("makeRiscv64SharedLibrary") {
+	def sharedFile = tasks.named("linkMainSharedLibrary").outputs.files.filter { it.name.contains("libmain.so") }.singleFile
+	dependsOn(tasks.linkMainSharedLibrary)
+	inputs.file(sharedFile)
+	outputs.file("${project.layout.buildDirectory.asFile.get().toPath()}/libmain.so")
+
+	doLast {
+		copy {
+			from sharedFile
+			into project.layout.buildDirectory.asFile.get()
+		}
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	dependsOn copyRiscv64SharedLibrary
+}
+
+model {
+	toolChains {
+		my_gcc(Gcc) {
+			path System.getProperty('user.home') + '/bin/dockcross-linux-riscv64'
+
+			target("linux_riscv64") {
+				cCompiler.executable = "dockcross-linux-riscv64-gcc"
+				cppCompiler.executable = "dockcross-linux-riscv64-gcc"
+				assembler.executable = "dockcross-linux-riscv64-gcc"
+				linker.executable = "dockcross-linux-riscv64-gcc"
+			}
+
+			eachPlatform {
+				cCompiler.withArguments { args ->
+					args << "-g"
+					args << "-Wl,-z,relro"
+					args << "-Wl,-z,now"
+				}
+			}
+		}
+	}
+
+	platforms {
+		linux_riscv64 {
+			architecture "riscv64"
+			operatingSystem "linux"
+		}
+	}
+
+	components {
+		main(NativeLibrarySpec) {
+			targetPlatform "linux_riscv64"
+		}
+	}
+
+}

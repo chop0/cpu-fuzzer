@@ -2,7 +2,7 @@ package ax.xz.fuzz.blocks;
 
 import ax.xz.fuzz.instruction.*;
 import ax.xz.fuzz.mutate.*;
-import ax.xz.fuzz.arch.Branch;
+import ax.xz.fuzz.arch.BlockEdge;
 import ax.xz.fuzz.runtime.Config;
 import ax.xz.fuzz.runtime.ExecutableSequence;
 import ax.xz.fuzz.arch.CPUState;
@@ -12,7 +12,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 import static java.nio.ByteOrder.nativeOrder;
 
 public class ProgramRandomiser {
@@ -24,11 +24,11 @@ public class ProgramRandomiser {
 		this.config = config;
 	}
 
-	public InvarianceTestCase selectTestCase(RandomGenerator rng, ResourcePartition master) {
+	public InvarianceTestCase selectTestCase(RandomGenerator rng, ResourcePartition master) throws NoPossibilitiesException {
 		var split = selectResourceSplit(rng, master);
 
 		var pairs = selectBlockPairs(rng, split);
-		var branches = selectBranches(rng);
+		var branches = selectBranches(master, rng);
 
 		var a = selectSequence(rng, pairs, branches);
 		var b = selectSequence(rng, pairs, branches);
@@ -42,10 +42,10 @@ public class ProgramRandomiser {
 		var master = split.master();
 
 		var map = new HashMap<RegisterDescriptor, byte[]>();
-		for (var reg : getArchitecture().trackedRegisters().intersection(master.allowedRegisters())) {
+		for (var reg : activeArchitecture().trackedRegisters().intersection(master.allowedRegisters())) {
 			var rp = a.allowedRegisters().hasRegister(reg) ? a : b;
 
-			if (reg ==  getArchitecture().stackPointer())
+			if (reg == activeArchitecture().stackPointer())
 				map.put(reg, ByteBuffer.allocate(8).order(nativeOrder())
 					.putLong(master.stack().address() + master.stack().byteSize()/2).array());
 			else if (reg.widthBytes() == 8) {
@@ -76,13 +76,13 @@ public class ProgramRandomiser {
 		return rng.nextLong();
 	}
 
-	public ExecutableSequence selectSequence(RandomGenerator rng, BlockPair[] pairs, Branch[] branches) {
-		var blocks = new InterleavedBlock[branches.length];
-		for (int i = 0; i < branches.length; i++) {
+	public ExecutableSequence selectSequence(RandomGenerator rng, BlockPair[] pairs, BlockEdge[] blockEdges) {
+		var blocks = new InterleavedBlock[blockEdges.length];
+		for (int i = 0; i < blockEdges.length; i++) {
 			blocks[i] = selectInterleaved(rng, pairs[i]);
 		}
 
-		return new ExecutableSequence(blocks, branches);
+		return new ExecutableSequence(blocks, blockEdges);
 	}
 
 	public InterleavedBlock selectInterleaved(RandomGenerator rng, BlockPair pair) {
@@ -106,7 +106,7 @@ public class ProgramRandomiser {
 		return new InterleavedBlock(pair, entries);
 	}
 
-	public BlockPair[] selectBlockPairs(RandomGenerator rng, ResourceSplit split) {
+	public BlockPair[] selectBlockPairs(RandomGenerator rng, ResourceSplit split) throws NoPossibilitiesException {
 		var pairs = new BlockPair[config.blockCount()];
 		for (int i = 0; i < pairs.length; i++) {
 			pairs[i] = selectBlockPair(rng, split);
@@ -114,24 +114,23 @@ public class ProgramRandomiser {
 		return pairs;
 	}
 
-	public Branch[] selectBranches(RandomGenerator rng) {
-		var branches = new Branch[config.blockCount()];
+	public BlockEdge[] selectBranches(ResourcePartition master, RandomGenerator rng) throws NoPossibilitiesException {
+		var branches = new BlockEdge[config.blockCount()];
 		for (int i = 0; i < config.blockCount(); i++) {
-			branches[i] = selectBranch(rng);
+			branches[i] = selectBranch(master, rng);
 		}
 		return branches;
 	}
 
-	public Branch selectBranch(RandomGenerator rng) {
-		var branchTypes = getArchitecture().allBranchTypes();
-		var type = branchTypes[rng.nextInt(branchTypes.length - 1)];
+	public BlockEdge selectBranch(ResourcePartition master, RandomGenerator rng) throws NoPossibilitiesException {
+		var type = activeArchitecture().randomBranchType(master, rng);
 		int taken = rng.nextInt(config.blockCount() + 1); // + 1 because the last block is the exit block
 		int notTaken = rng.nextInt(config.blockCount() + 1);
 
-		return new Branch(type, taken, notTaken);
+		return new BlockEdge(type, taken, notTaken);
 	}
 
-	public BlockPair selectBlockPair(RandomGenerator rng, ResourceSplit split) {
+	public BlockPair selectBlockPair(RandomGenerator rng, ResourceSplit split) throws NoPossibilitiesException {
 		var lhs = selectBlock(rng, split.left());
 		var rhs = selectBlock(rng, split.right());
 
@@ -144,7 +143,7 @@ public class ProgramRandomiser {
 		var rhsRegisters = RegisterSet.of();
 
 		var universe = master.allowedRegisters();
-		for (var bank : getArchitecture().subregisterSets()) {
+		for (var bank : activeArchitecture().subregisterSets()) {
 			if (rng.nextBoolean())
 				lhsRegisters = lhsRegisters.union(bank.intersection(universe));
 			else
@@ -157,7 +156,7 @@ public class ProgramRandomiser {
 
 		var memorySplit = selectMemorySplit(master);
 
-		var sp =  getArchitecture().stackPointer();
+		var sp =  activeArchitecture().stackPointer();
 		return new ResourceSplit(
 			new ResourcePartition(lhsFlags, lhsRegisters, memorySplit.getKey(), lhsRegisters.hasRegister(sp) ? master.stack() : MemorySegment.NULL),
 			new ResourcePartition(EnumSet.complementOf(lhsFlags), rhsRegisters, memorySplit.getValue(), rhsRegisters.hasRegister(sp) ? master.stack() : MemorySegment.NULL),
@@ -174,7 +173,7 @@ public class ProgramRandomiser {
 		return Map.entry(lhsPartition, rhsPartition);
 	}
 
-	public BasicBlock selectBlock(RandomGenerator rng, ResourcePartition partition) {
+	public BasicBlock selectBlock(RandomGenerator rng, ResourcePartition partition) throws NoPossibilitiesException {
 		var entries = new ArrayList<BlockEntry>();
 		int instructionCount = rng.nextInt(config.maxInstructionCount());
 
@@ -185,19 +184,14 @@ public class ProgramRandomiser {
 		return new BasicBlock(entries);
 	}
 
-	public BlockEntry.FuzzEntry selectBlockEntry(RandomGenerator rng, ResourcePartition partition) {
-		var opc = getArchitecture().allOpcodes();
+	public BlockEntry.FuzzEntry selectBlockEntry(RandomGenerator rng, ResourcePartition partition) throws NoPossibilitiesException {
+		var opc = activeArchitecture().allOpcodes();
 
 		for (; ; ) {
 			var variant = opc[rng.nextInt(opc.length)];
 			if (!variant.fulfilledBy(partition)) continue;
 
-			InstructionBuilder instruction = null;
-			try {
-				instruction = variant.select(rng, partition);
-			} catch (NoPossibilitiesException e) {
-				throw new RuntimeException(e);
-			}
+			InstructionBuilder instruction = variant.select(rng, partition);
 
 			var mut = selectMutations(rng, partition, variant, instruction);
 

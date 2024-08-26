@@ -48,9 +48,23 @@ extern uint8_t trampoline_exitpoint;
 extern uint8_t trampoline_begin;
 extern uint8_t trampoline_end;
 
-typedef  struct {
+#ifdef __amd64
+typedef struct {
 	void *fs_base;
 	void *gs_base;
+} critical_registers_t;
+
+#elif defined(__riscv)
+typedef struct {
+	void *tp;
+	void *gp;
+} critical_registers_t;
+#else
+#error "Unsupported architecture"
+#endif
+
+typedef struct {
+	critical_registers_t critical_registers;
 	void *trampoline_address;
 	void *sigstk_address;
 

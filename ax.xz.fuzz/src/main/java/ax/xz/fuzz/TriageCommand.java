@@ -1,6 +1,5 @@
 package ax.xz.fuzz;
 
-import ax.xz.fuzz.mutate.Mutator;
 import ax.xz.fuzz.runtime.*;
 import picocli.CommandLine;
 
@@ -8,10 +7,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ForkJoinPool;
 import java.util.zip.DataFormatException;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 import static ax.xz.fuzz.runtime.Config.defaultConfig;
 import static picocli.CommandLine.Command;
 import static picocli.CommandLine.Help.Visibility.ALWAYS;
@@ -45,7 +43,7 @@ public class TriageCommand implements Callable<Void> {
 
 		var tester = SequenceExecutor.forRecordedCase(config, tc);
 
-		var branches = tc.branches();
+		var branches = tc.blockEdges();
 		var sequenceA = new ExecutableSequence(tc.blocksA(), branches);
 		var sequenceB = new ExecutableSequence(tc.blocksB(), branches);
 
@@ -58,7 +56,7 @@ public class TriageCommand implements Callable<Void> {
 			System.out.println(lastResult);
 			System.out.println(result2);
 
-			if (getArchitecture().interestingMismatch(lastResult, result2)) {
+			if (activeArchitecture().interestingMismatch(lastResult, result2)) {
 				System.out.println("Interesting mismatch found");
 
 				if (lastResult instanceof ExecutionResult.Success(var A) && result2 instanceof ExecutionResult.Success(var B)) {

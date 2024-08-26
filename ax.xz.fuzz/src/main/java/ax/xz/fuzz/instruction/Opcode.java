@@ -4,20 +4,11 @@ import ax.xz.fuzz.blocks.NoPossibilitiesException;
 
 import java.util.random.RandomGenerator;
 
-public abstract class Opcode {
-	protected final String mnemonic;
+public interface Opcode {
 
-	public Opcode(String mnemonic) {
-		this.mnemonic = mnemonic;
-	}
+	InstructionBuilder select(RandomGenerator rng, ResourcePartition resourcePartition) throws NoPossibilitiesException;
 
-	public abstract InstructionBuilder configureRandomly(RandomGenerator random, ResourcePartition rp);
+	boolean fulfilledBy(ResourcePartition rp);
 
-	public abstract InstructionBuilder select(RandomGenerator rng, ResourcePartition resourcePartition) throws NoPossibilitiesException;
-
-	public abstract boolean fulfilledBy(ResourcePartition rp);
-
-	public String mnemonic() {
-		return mnemonic;
-	}
+	String mnemonic();
 }

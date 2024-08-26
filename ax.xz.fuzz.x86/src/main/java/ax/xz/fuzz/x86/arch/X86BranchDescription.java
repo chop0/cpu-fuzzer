@@ -1,13 +1,13 @@
 package ax.xz.fuzz.x86.arch;
 
-import ax.xz.fuzz.arch.BranchType;
+import ax.xz.fuzz.arch.BranchDescription;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.github.icedland.iced.x86.asm.CodeAssembler;
 import com.github.icedland.iced.x86.asm.CodeLabel;
 
 import java.util.function.BiConsumer;
 
-public enum X86BranchType implements BranchType  {
+public enum X86BranchDescription implements BranchDescription {
 	JO(CodeAssembler::jo),
 	JNO(CodeAssembler::jno),
 	JS(CodeAssembler::js),
@@ -27,12 +27,12 @@ public enum X86BranchType implements BranchType  {
 	JMP(CodeAssembler::jmp);;
 	public final BiConsumer<CodeAssembler, CodeLabel> perform;
 
-	X86BranchType(BiConsumer<CodeAssembler, CodeLabel> perform) {
+	X86BranchDescription(BiConsumer<CodeAssembler, CodeLabel> perform) {
 		this.perform = perform;
 	}
 
 	@JsonCreator
-	public static X86BranchType fromString(String name) {
+	public static X86BranchDescription fromString(String name) {
 		return valueOf(name);
 	}
 }

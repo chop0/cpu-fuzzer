@@ -98,14 +98,26 @@ static void __signal_handler_jvm(int signal, siginfo_t *si, void *ptr) {
 	abort();
 }
 
-static void __save_segment_registers(int index) {
+static void __save_critical_registers(critical_registers_t *critical_registers) {
+#ifdef __amd64
 	active_thread_info[index].fs_base = (void *)__builtin_ia32_rdfsbase64();
 	active_thread_info[index].gs_base =(void *) __builtin_ia32_rdgsbase64();
+#elif defined(__riscv)
+	__asm__ volatile("mv %0, tp" : "=r"(critical_registers->tp));
+	__asm__ volatile("mv %0, gp" : "=r"(critical_registers->gp));
+#else
 }
 
-static void __restore_segment_registers(int index) {
-	_writefsbase_u64((uint64_t) active_thread_info[index].fs_base);
-	_writegsbase_u64((uint64_t) active_thread_info[index].gs_base);
+static void __restore_critical_registers(critical_registers_t *critical_registers) {
+#ifdef __amd64
+	_writefsbase_u64((uint64_t) critical_registers->fs_base);
+	_writegsbase_u64((uint64_t) critical_registers->gs_base);
+#elif defined(__riscv)
+	__asm__ volatile("mv tp, %0" : : "r"(critical_registers->tp));
+	__asm__ volatile("mv gp, %0" : : "r"(critical_registers->gp));
+#else
+#error "Unsupported architecture"
+#endif
 }
 
 struct signal_monitor_args {
@@ -189,7 +201,7 @@ void signal_handler(int signal, siginfo_t *si, void *ptr) {
 		return;
 	}
 
-	__restore_segment_registers(index);
+	__restore_critical_registers(index);
 
 	assert(index == my_thread_idx);
 	active_thread_info[index].faulted = true;
@@ -305,7 +317,7 @@ void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 	assert(my_thread_idx >= 0);
 	assert(my_thread_idx <= THREAD_IDX_MAX);
 
-	__save_segment_registers(my_thread_idx);
+	__save_critical_registers(my_thread_idx);
 
 	trampoline_entrypoint_t *entrypoint = TRAMPOLINE_ENTRYPOINT(my_thread_idx);
 	active_thread_info[my_thread_idx].faulted = false;

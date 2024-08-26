@@ -1,7 +1,7 @@
 package ax.xz.fuzz.x86.arch;
 
 import ax.xz.fuzz.arch.Architecture;
-import ax.xz.fuzz.arch.BranchType;
+import ax.xz.fuzz.arch.BranchDescription;
 import ax.xz.fuzz.arch.CPUState;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.RegisterDescriptor;
@@ -104,13 +104,13 @@ public class X86Architecture implements Architecture {
 	}
 
 	@Override
-	public BranchType unconditionalJump() {
-		return X86BranchType.JMP;
+	public BranchDescription unconditionalJump() {
+		return X86BranchDescription.JMP;
 	}
 
 	@Override
-	public BranchType[] allBranchTypes() {
-		return X86BranchType.values();
+	public BranchDescription[] allBranchTypes() {
+		return X86BranchDescription.values();
 	}
 
 	@Override
@@ -162,7 +162,7 @@ public class X86Architecture implements Architecture {
 			}
 
 			switch (branches[i].type()) {
-				case X86BranchType t ->
+				case X86BranchDescription t ->
 					t.perform.accept(blockAssembler, blockHeaders[branches[i].takenIndex()]);
 				default ->
 					throw new IllegalArgumentException("Unknown branch type (are you trying to replay a test case from the wrong architecture?): " + branches[i].type());
@@ -211,6 +211,14 @@ public class X86Architecture implements Architecture {
 		}
 
 		return false;
+	}
+
+	@Override
+	public int registerIndex(RegisterDescriptor descriptor) {
+		return switch (descriptor) {
+			case x86RegisterDescriptor r -> r.ordinal();
+			default -> throw new IllegalArgumentException("Unknown register descriptor: " + descriptor);
+		};
 	}
 
 	public static X86Architecture ofNative() {

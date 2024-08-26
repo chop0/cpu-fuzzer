@@ -1,6 +1,6 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.arch.Branch;
+import ax.xz.fuzz.arch.BlockEdge;
 import ax.xz.fuzz.blocks.Block;
 
 import java.util.Arrays;
@@ -8,24 +8,24 @@ import java.util.Objects;
 
 public final class ExecutableSequence {
 	private final Block[] blocks;
-	private final Branch[] branches;
+	private final BlockEdge[] blockEdges;
 
-	public ExecutableSequence(Block[] blocks, Branch[] branches) {
+	public ExecutableSequence(Block[] blocks, BlockEdge[] blockEdges) {
 		if (blocks.length == 0)
 			throw new IllegalArgumentException("blocks must not be empty");
 		this.blocks = new Block[blocks.length];
-		this.branches = new Branch[branches.length];
+		this.blockEdges = new BlockEdge[blockEdges.length];
 
 		System.arraycopy(blocks, 0, this.blocks, 0, blocks.length);
-		System.arraycopy(branches, 0, this.branches, 0, branches.length);
+		System.arraycopy(blockEdges, 0, this.blockEdges, 0, blockEdges.length);
 	}
 
 	public Block[] blocks() {
 		return blocks;
 	}
 
-	public Branch[] branches() {
-		return branches;
+	public BlockEdge[] branches() {
+		return blockEdges;
 	}
 
 	@Override
@@ -34,12 +34,12 @@ public final class ExecutableSequence {
 		if (obj == null || obj.getClass() != this.getClass()) return false;
 		var that = (ExecutableSequence) obj;
 		return Arrays.equals(this.blocks, that.blocks) &&
-		       Arrays.equals(this.branches, that.branches);
+		       Arrays.equals(this.blockEdges, that.blockEdges);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(Arrays.hashCode(blocks), Arrays.hashCode(branches));
+		return Objects.hash(Arrays.hashCode(blocks), Arrays.hashCode(blockEdges));
 	}
 
 }

@@ -1,6 +1,7 @@
 package ax.xz.fuzz.x86.operand;
 
 import ax.xz.fuzz.blocks.Block;
+import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.instruction.MemoryPartition;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.ResourcePartition;
@@ -159,13 +160,13 @@ public record OpcodeCache(int version, Opcode[] opcodes) {
 			var executor = SequenceExecutor.withIndex(Config.defaultConfig(), 0);
 			var scratch = mmap(arena, MemorySegment.ofAddress(0x4000000), 4096, READ, WRITE);
 			var rp = new ResourcePartition(StatusFlag.all(), executor.legallyModifiableRegisters(), MemoryPartition.of(scratch), scratch);
-			var insn = opcode.configureRandomly(r, rp);
+			var insn = opcode.select(r, rp);
 
 			return X86UarchInfo.checkInstructionExistence(asm -> asm.addInstruction(insn.instruction()));
-		} catch (RuntimeException e) {
+		} catch (RuntimeException | NoPossibilitiesException e) {
 			if (e.getCause() instanceof Block.UnencodeableException)
 				return false;
-			else throw e;
+			else throw new RuntimeException(e);
 		}
 	}
 }

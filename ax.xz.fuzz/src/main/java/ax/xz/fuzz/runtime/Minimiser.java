@@ -1,13 +1,13 @@
 package ax.xz.fuzz.runtime;
 
-import ax.xz.fuzz.arch.Branch;
+import ax.xz.fuzz.arch.BlockEdge;
 import ax.xz.fuzz.blocks.Block;
 import ax.xz.fuzz.blocks.BlockEntry;
 import ax.xz.fuzz.blocks.InvarianceTestCase;
 
 import java.util.*;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 
 public class Minimiser {
 	private final SequenceExecutor executor;
@@ -44,7 +44,7 @@ public class Minimiser {
 	}
 
 	private boolean simplifyBranches(TestCase tc) {
-		for (int i = 0; i < tc.branches().length; i++) {
+		for (int i = 0; i < tc.blockEdges().length; i++) {
 			if (simplifyBranch(tc, i)) {
 				return true;
 			}
@@ -65,25 +65,25 @@ public class Minimiser {
 
 	private boolean simplifyBranch(TestCase tc, int branchIndex) {
 		int end = tc.blocksA().length;
-		var oldBranch = tc.branches()[branchIndex];
-		var jmp = getArchitecture().unconditionalJump();
+		var oldBranch = tc.blockEdges()[branchIndex];
+		var jmp = activeArchitecture().unconditionalJump();
 
-		tc.branches()[branchIndex] = new Branch(jmp, end, end);
-		if (!tc.branches()[branchIndex].equals(oldBranch) && executor.lookForMismatch(tc, attempts)) {
+		tc.blockEdges()[branchIndex] = new BlockEdge(jmp, end, end);
+		if (!tc.blockEdges()[branchIndex].equals(oldBranch) && executor.lookForMismatch(tc, attempts)) {
 			return true;
 		}
 
-		tc.branches()[branchIndex] = new Branch(jmp, oldBranch.takenIndex(), oldBranch.notTakenIndex());
-		if (!tc.branches()[branchIndex].equals(oldBranch) && executor.lookForMismatch(tc, attempts)) {
+		tc.blockEdges()[branchIndex] = new BlockEdge(jmp, oldBranch.takenIndex(), oldBranch.notTakenIndex());
+		if (!tc.blockEdges()[branchIndex].equals(oldBranch) && executor.lookForMismatch(tc, attempts)) {
 			return true;
 		}
 
-		tc.branches()[branchIndex] = new Branch(jmp, oldBranch.notTakenIndex(), oldBranch.takenIndex());
-		if (!tc.branches()[branchIndex].equals(oldBranch) && executor.lookForMismatch(tc, attempts)) {
+		tc.blockEdges()[branchIndex] = new BlockEdge(jmp, oldBranch.notTakenIndex(), oldBranch.takenIndex());
+		if (!tc.blockEdges()[branchIndex].equals(oldBranch) && executor.lookForMismatch(tc, attempts)) {
 			return true;
 		}
 
-		tc.branches()[branchIndex] = oldBranch;
+		tc.blockEdges()[branchIndex] = oldBranch;
 		return false;
 	}
 
@@ -118,15 +118,15 @@ public class Minimiser {
 	}
 
 
-	private void findVisitedBranches(Branch[] branches, int currentIndex, HashSet<Integer> visited) {
+	private void findVisitedBranches(BlockEdge[] blockEdges, int currentIndex, HashSet<Integer> visited) {
 		if (visited.contains(currentIndex)) {
 			return;
 		}
 		visited.add(currentIndex);
 
-		if (currentIndex < branches.length) {
-			findVisitedBranches(branches, branches[currentIndex].takenIndex(), visited);
-			findVisitedBranches(branches, branches[currentIndex].notTakenIndex(), visited);
+		if (currentIndex < blockEdges.length) {
+			findVisitedBranches(blockEdges, blockEdges[currentIndex].takenIndex(), visited);
+			findVisitedBranches(blockEdges, blockEdges[currentIndex].notTakenIndex(), visited);
 		}
 	}
 
@@ -135,7 +135,7 @@ public class Minimiser {
 		var blocksB = tc.blocksB();
 
 		var visited = new HashSet<Integer>();
-		findVisitedBranches(tc.branches(), 0, visited);
+		findVisitedBranches(tc.blockEdges(), 0, visited);
 
 		var originalBlockLocationsA = new HashMap<Integer, Block>();
 		var originalBlockLocationsB = new HashMap<Integer, Block>();
@@ -159,22 +159,22 @@ public class Minimiser {
 
 		// now, we need to relocate the branches
 
-		var newBranches = new ArrayList<Branch>();
-		for (int i = 0; i < tc.branches().length; i++) {
+		var newBranches = new ArrayList<BlockEdge>();
+		for (int i = 0; i < tc.blockEdges().length; i++) {
 			if (visited.contains(i)) {
-				var branch = tc.branches()[i];
+				var branch = tc.blockEdges()[i];
 				int takenIndex = branch.takenIndex();
 				int notTakenIndex = branch.notTakenIndex();
 
 				var newTaken = takenIndex == blocksA.length ? newBlocksA.size() : newBlocksA.indexOf(originalBlockLocationsA.get(takenIndex));
 				var newNotTaken = notTakenIndex == blocksA.length ? newBlocksA.size() : newBlocksA.indexOf(originalBlockLocationsA.get(notTakenIndex));
-				newBranches.add(new Branch(branch.type(), newTaken, newNotTaken));
+				newBranches.add(new BlockEdge(branch.type(), newTaken, newNotTaken));
 			}
 		}
 
 		var blocksAArray = newBlocksA.toArray(Block[]::new);
 		var blocksBArray = newBlocksB.toArray(Block[]::new);
-		var newBranchesArray = newBranches.toArray(Branch[]::new);
+		var newBranchesArray = newBranches.toArray(BlockEdge[]::new);
 		return switch (tc) {
 			case InvarianceTestCase(_, _, _, var state) -> new InvarianceTestCase(newBranchesArray, new ExecutableSequence(blocksAArray, newBranchesArray), new ExecutableSequence(blocksBArray, newBranchesArray), state);
 			case RecordedTestCase(var initialState, var _, var _, var codeLocation, var _, var memory) -> new RecordedTestCase(initialState, blocksAArray, blocksBArray, codeLocation, newBranchesArray, memory);

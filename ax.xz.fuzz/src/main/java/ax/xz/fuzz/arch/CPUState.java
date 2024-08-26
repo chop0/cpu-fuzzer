@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 
 @JsonSerialize(using = CPUState.CPUStateSerializer.class)
 @JsonDeserialize(using = CPUState.CPUStateDeserializer.class)
@@ -63,7 +63,7 @@ public record CPUState( Map<RegisterDescriptor, byte[]> values) {
 
 	@Override
 	public String toString() {
-		var sorted = values.entrySet().stream().sorted(Comparator.comparing(e -> e.getKey().index())).toList();
+		var sorted = values.entrySet().stream().sorted(Comparator.comparing(e -> activeArchitecture().registerIndex(e.getKey()))).toList();
 		var sb = new StringBuilder();
 		for (var entry : sorted) {
 			sb.append(entry.getKey()).append(": ");
@@ -81,7 +81,7 @@ public record CPUState( Map<RegisterDescriptor, byte[]> values) {
 		@Override
 		public void serialize(CPUState cpuState, JsonGenerator jsonGenerator, SerializerProvider serializerProvider) throws IOException {
 			Map<RegisterDescriptor, byte[]> sortedValues = cpuState.values.entrySet().stream()
-				.sorted(Map.Entry.comparingByKey(Comparator.comparingInt(RegisterDescriptor::index)))
+				.sorted(Map.Entry.comparingByKey(Comparator.comparingInt(activeArchitecture()::registerIndex)))
 				.collect(Collectors.toMap(
 					Map.Entry::getKey,
 					Map.Entry::getValue,
@@ -117,9 +117,9 @@ public record CPUState( Map<RegisterDescriptor, byte[]> values) {
 			Iterator<Map.Entry<String, JsonNode>> fields = rootNode.fields();
 			while (fields.hasNext()) {
 				Map.Entry<String, JsonNode> field = fields.next();
-				RegisterDescriptor rd = getArchitecture().registerByName(field.getKey());
+				RegisterDescriptor rd = activeArchitecture().registerByName(field.getKey());
 
-				if (!getArchitecture().trackedRegisters().hasRegister(rd))
+				if (!activeArchitecture().trackedRegisters().hasRegister(rd))
 					continue;
 
 				byte[] data = hexStringToByteArray(field.getValue().asText());

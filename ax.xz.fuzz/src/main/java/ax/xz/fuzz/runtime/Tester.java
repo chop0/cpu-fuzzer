@@ -1,16 +1,16 @@
 package ax.xz.fuzz.runtime;
 
 import ax.xz.fuzz.blocks.InvarianceTestCase;
+import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.blocks.ProgramRandomiser;
 import ax.xz.fuzz.instruction.MemoryPartition;
-import ax.xz.fuzz.instruction.RegisterSet;
 import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.instruction.StatusFlag;
 
 import java.util.SplittableRandom;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 
 public class Tester {
 	private final SequenceExecutor executor;
@@ -27,7 +27,12 @@ public class Tester {
 	}
 
 	public TestResult runTest() {
-		var tc = randomiser.selectTestCase(rng, partition);
+		InvarianceTestCase tc = null;
+		try {
+			tc = randomiser.selectTestCase(rng, partition);
+		} catch (NoPossibilitiesException e) {
+			throw new RuntimeException(e);
+		}
 
 		var a = executor.runSequence(tc.initialState(), tc.a());
 		var b = executor.runSequence(tc.initialState(), tc.b());
@@ -46,7 +51,7 @@ public class Tester {
 
 	public record TestResult(ExecutionResult a, ExecutionResult b, InvarianceTestCase tc) {
 		public boolean hasInterestingMismatch() {
-			return getArchitecture().interestingMismatch(a, b);
+			return activeArchitecture().interestingMismatch(a, b);
 		}
 	}
 

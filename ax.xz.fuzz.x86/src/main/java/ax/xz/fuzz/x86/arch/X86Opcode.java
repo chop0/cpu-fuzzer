@@ -27,7 +27,9 @@ import static java.util.Objects.requireNonNull;
 import static java.util.stream.Stream.concat;
 
 @JsonInclude(NON_NULL)
-public final class X86Opcode extends Opcode {
+public final class X86Opcode implements Opcode {
+	private final String mnemonic;
+
 	private final EnumSet<Prefix> prefixes;
 	private final String icedFieldName;
 	private final int icedVariant;
@@ -35,7 +37,7 @@ public final class X86Opcode extends Opcode {
 
 	@JsonCreator
 	public X86Opcode(EnumSet<Prefix> prefixes, String icedFieldName, String mnemonic, int icedVariant, Operand[] operands) {
-		super(mnemonic);
+		this.mnemonic = mnemonic;
 		this.prefixes = prefixes;
 		this.icedFieldName = icedFieldName;
 		this.icedVariant = icedVariant;
@@ -44,7 +46,12 @@ public final class X86Opcode extends Opcode {
 		// guess the width of the immediate operands
 		var mem = MemorySegment.ofAddress(0x40000).reinterpret(0x1000);
 		var anything = new ResourcePartition(StatusFlag.all(), X86Architecture.ofNative().validRegisters(), MemoryPartition.of(mem), mem);
-		var insn = configureRandomly(new Random(0), anything);
+		X86InstructionBuilder insn = null;
+		try {
+			insn = select(new Random(0), anything);
+		} catch (NoPossibilitiesException e) {
+			throw new RuntimeException(e);
+		}
 
 		var encoder = new Encoder(64, _ -> {
 		});
@@ -65,27 +72,6 @@ public final class X86Opcode extends Opcode {
 				}
 			}
 		}
-	}
-
-	@Override
-	public X86InstructionBuilder configureRandomly(RandomGenerator random, ResourcePartition rp) {
-		var insn = new X86InstructionBuilder(Instruction.create(icedVariant));
-		int explicitOpIdx = 0;
-
-		try {
-			for (var operand : operands) {
-				int operandIndex = -1;
-				if (operand.counted()) {
-					operandIndex = explicitOpIdx++;
-				}
-
-				operand.select(random, insn.instruction(), operandIndex, rp);
-			}
-		} catch (NoPossibilitiesException e) {
-			throw new RuntimeException(e);
-		}
-
-		return insn;
 	}
 
 	@Override
@@ -248,4 +234,8 @@ public final class X86Opcode extends Opcode {
 		return listener.getOperands();
 	}
 
+	@Override
+	public String mnemonic() {
+		return mnemonic;
+	}
 }

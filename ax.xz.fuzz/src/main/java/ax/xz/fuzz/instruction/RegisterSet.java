@@ -9,7 +9,7 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static ax.xz.fuzz.arch.Architecture.getArchitecture;
+import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 
 public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	public static RegisterSet EMPTY = new RegisterSet(new BitSet());
@@ -30,7 +30,7 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 
 	public static Collector<? super RegisterDescriptor, BitSet, RegisterSet> collector() {
 		return Collector.of(BitSet::new, (bitSet, registerDescriptor) -> {
-			bitSet.set(registerDescriptor.index());
+			bitSet.set(activeArchitecture().registerIndex(registerDescriptor));
 		}, (bs1, bs2) -> {
 			bs1.or(bs2);
 			return bs1;
@@ -44,7 +44,7 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	}
 
 	public boolean hasRegister(RegisterDescriptor register) {
-		return registers.get(register.index());
+		return registers.get(activeArchitecture().registerIndex(register));
 	}
 
 	public RegisterSet intersection(RegisterSet other) {
@@ -109,7 +109,7 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 			currentIndex = registers.nextSetBit(currentIndex + 1);
 		}
 
-		return getArchitecture().registerByIndex(currentIndex);
+		return activeArchitecture().registerByIndex(currentIndex);
 	}
 
 	public RegisterSet consecutiveBlocks(int blockSize, RegisterSet startRegisters) {
@@ -121,15 +121,15 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	}
 
 	public Stream<RegisterDescriptor> stream() {
-		return registers.stream().mapToObj(n -> getArchitecture().registerByIndex(n));
+		return registers.stream().mapToObj(n -> activeArchitecture().registerByIndex(n));
 	}
 
 	public RegisterDescriptor first() {
-		return getArchitecture().registerByIndex(registers.nextSetBit(0));
+		return activeArchitecture().registerByIndex(registers.nextSetBit(0));
 	}
 
 	public RegisterDescriptor last() {
-		return getArchitecture().registerByIndex(registers.previousSetBit(registers.length() - 1));
+		return activeArchitecture().registerByIndex(registers.previousSetBit(registers.length() - 1));
 	}
 
 	@Override
@@ -149,7 +149,7 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 	public String toString() {
 		return registers.stream()
 			.sorted()
-			.mapToObj(getArchitecture()::registerByIndex)
+			.mapToObj(activeArchitecture()::registerByIndex)
 			.map(n -> n.toString())
 			.collect(Collectors.joining(", ", "{", "}"));
 	}
@@ -166,6 +166,6 @@ public final class RegisterSet implements Iterable<RegisterDescriptor> {
 		if (this == EMPTY)
 			return Stream.<RegisterDescriptor>empty().iterator();
 
-		return registers.stream().mapToObj(getArchitecture()::registerByIndex).iterator();
+		return registers.stream().mapToObj(activeArchitecture()::registerByIndex).iterator();
 	}
 }

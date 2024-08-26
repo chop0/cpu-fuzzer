@@ -301,11 +301,6 @@ public enum x86RegisterDescriptor implements RegisterDescriptor {
 	}
 
 	@Override
-	public int index() {
-		return ordinal();
-	}
-
-	@Override
 	public int widthBytes() {
 		return switch (bank) {
 			case SPECIAL -> 4;
