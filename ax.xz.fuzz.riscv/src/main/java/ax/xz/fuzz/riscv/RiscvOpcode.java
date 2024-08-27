@@ -19,6 +19,7 @@ public interface RiscvOpcode extends Opcode {
 		var builder = RiscvInstructionBuilder.of((RiscvArchitecture) activeArchitecture(), this);
 
 		var unsetFields = builder.unsetFields();
+
 		for (RiscvInstructionField unsetField : unsetFields) {
 			unsetField.select(builder, rng, resourcePartition);
 		}
@@ -47,4 +48,6 @@ public interface RiscvOpcode extends Opcode {
 
 		return true;
 	}
+
+	boolean isControlFlow();
 }

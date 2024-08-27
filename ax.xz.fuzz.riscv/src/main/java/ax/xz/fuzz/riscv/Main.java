@@ -10,7 +10,7 @@ import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
 public class Main {
 	public static void main(String[] args) {
-		var arch = new RiscvArchitecture(new RiscvBaseModule.RV32I());
+		var arch = new RiscvArchitecture(new RiscvBaseModule.RV64I());
 
 		Architecture.withArchitecture(arch, () -> {
 			var assembler = new RiscvAssembler(0, arch);

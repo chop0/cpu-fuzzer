@@ -14,6 +14,12 @@ repositories {
 	mavenCentral()
 }
 
+
+java {
+	sourceCompatibility = "22.PREVIEW"
+	targetCompatibility = "22.PREVIEW"
+}
+
 dependencies {
 	implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
 	implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
@@ -28,6 +34,14 @@ dependencies {
 
 	testImplementation platform('org.junit:junit-bom:5.10.0')
 	testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+sourceSets {
+	main {
+		resources {
+			srcDir "${project.layout.buildDirectory.asFile.get().toPath()}/lib/"
+		}
+	}
 }
 
 test {
@@ -49,8 +63,10 @@ jextract {
 			     'ILL_COPROC',
 			     'ILL_BADSTK'
 		]
-		useSystemLoadLibrary = true
-		libraries = ['main']
+
+		useSystemLoadLibrary = false
+
+		definedMacros = ['SLAVE_AMD64']
 
 		variables = ['routine_begin', 'routine_end']
 		structs = ['fault_details', 'execution_result', 'saved_state']
@@ -58,21 +74,29 @@ jextract {
 }
 
 def copyX86SharedLibrary = tasks.register("makeX86SharedLibrary") {
-	def sharedFile = tasks.named("linkMainSharedLibrary").outputs.files.filter { it.name.contains("libmain.so") }.singleFile
+	def sharedFile = tasks.named("linkMainSharedLibrary").get().outputs.files.filter { it.name.contains("libmain.so") }.singleFile
+	def dstDir = project.layout.buildDirectory.asFile.get().toPath().resolve("lib")
+
 	dependsOn(tasks.linkMainSharedLibrary)
 	inputs.file(sharedFile)
-	outputs.file("${project.layout.buildDirectory.asFile.get().toPath()}/libmain.so")
+	outputs.dir(dstDir)
 
 	doLast {
+		mkdir(dstDir)
 		copy {
 			from sharedFile
-			into project.layout.buildDirectory.asFile.get()
+			into dstDir
+
+			rename { "libmain.x86_64.so"}
 		}
 	}
 }
 
+processResources.dependsOn(copyX86SharedLibrary)
+
 tasks.withType(JavaCompile).configureEach {
 	dependsOn copyX86SharedLibrary
+	options.compilerArgs.add("--enable-preview")
 }
 
 model {
@@ -98,6 +122,7 @@ model {
 					args << "-g"
 					args << "-Wl,-z,relro"
 					args << "-Wl,-z,now"
+					args << "-DSLAVE_AMD64"
 				}
 			}
 		}

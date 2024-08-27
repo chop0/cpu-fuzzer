@@ -1,6 +1,10 @@
 #pragma once
 #define _GNU_SOURCE
 
+#if !defined(SLAVE_AMD64) && !defined(SLAVE_RISCV)
+#error "Unsupported architecture"
+#endif
+
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -11,13 +15,15 @@
 #include <unistd.h>
 #include <signal.h>
 
+
+#if defined(SLAVE_AMD64)
 #ifdef __AVX512F__
 #define EVEX
 #define AVX_REGISTERS 32
 #else
 #define AVX_REGISTERS 16
 #endif
-
+#endif
 
 typedef struct {
     void *trampoline_code;
@@ -28,39 +34,18 @@ typedef struct {
 } trampoline_t;
 
 struct saved_state {
+#ifdef SLAVE_AMD64
     uint64_t fs_base, gs_base, rax, rbx, rcx, rdx, rsi, rdi, rbp, r8, r9, r10, r11, r12, r13, r14, r15, rsp;
     uint8_t zmm [32][64];
     uint64_t mm[8];
     uint64_t rflags;
+#elif defined(SLAVE_RISCV)
+    uint64_t regs[32];
+    uint64_t fregs[32];
+#else
+#error "Unsupported architecture"
+#endif
 }  __attribute__((aligned(16)));
-
-struct callee_saved {
-	uint64_t r12, r13, r14, r15, rbx, rbp, rsp;
-	uint64_t rflags;
-	uint32_t mxcsr;
-	uint8_t fenv[28];
-	uint64_t fs_base, gs_base;
-};
-
-#define SAVED_STATE_QFIELDS(V) \
-    V(fs_base) \
-    V(gs_base) \
-    V(rax) \
-    V(rbx) \
-    V(rcx) \
-    V(rdx) \
-    V(rsi) \
-    V(rdi) \
-    V(rbp) \
-    V(r8) \
-    V(r9) \
-    V(r10) \
-    V(r11) \
-    V(r12) \
-    V(r13) \
-    V(r14) \
-    V(r15) \
-    V(rsp)
 
 struct fault_details {
     void *fault_address;

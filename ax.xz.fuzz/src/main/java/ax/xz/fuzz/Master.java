@@ -1,5 +1,6 @@
 package ax.xz.fuzz;
 
+import ax.xz.fuzz.arch.Architecture;
 import picocli.CommandLine;
 import static picocli.CommandLine.*;
 import static picocli.CommandLine.Model.*;
@@ -22,12 +23,14 @@ public class Master implements Runnable {
 	}
 
 	public static void main(String[] args) throws IOException, InterruptedException, ExecutionException {
-		System.exit(new CommandLine(new Master())
+		Architecture.withArchitecture(Architecture.nativeArchitecture(), () -> {
+			System.exit(new CommandLine(new Master())
 				.setExecutionStrategy(new RunLast())
 				.setExecutionExceptionHandler((ex, _, _) -> {
 					ex.printStackTrace();
 					throw ex;
 				})
-			.execute(args));
+				.execute(args));
+		});
 	}
 }

@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 #include <setjmp.h>
 
@@ -13,7 +14,16 @@
 #define ALT_STACKS_BEGIN ((void *) 0xaf0000000)
 
 #define ALT_STACK_SIZE (1048576)
+
+#ifdef SLAVE_AMD64
+#define TEST_CASE_TIMEOUT_SEC (0)
 #define TEST_CASE_TIMEOUT_NS (1000000)
+#elif defined(SLAVE_RISCV)
+#define TEST_CASE_TIMEOUT_SEC (1)
+#define TEST_CASE_TIMEOUT_NS (0)
+#else
+#error "Unsupported architecture"
+#endif
 
 #define thread_local _Thread_local
 
@@ -48,13 +58,13 @@ extern uint8_t trampoline_exitpoint;
 extern uint8_t trampoline_begin;
 extern uint8_t trampoline_end;
 
-#ifdef __amd64
+#ifdef SLAVE_AMD64
 typedef struct {
 	void *fs_base;
 	void *gs_base;
 } critical_registers_t;
 
-#elif defined(__riscv)
+#elif defined(SLAVE_RISCV)
 typedef struct {
 	void *tp;
 	void *gp;

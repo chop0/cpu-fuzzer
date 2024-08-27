@@ -5,10 +5,7 @@ import ax.xz.fuzz.riscv.RiscvInstructionField;
 import ax.xz.fuzz.riscv.RiscvInstructionFormat;
 import ax.xz.fuzz.riscv.RiscvOpcode;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 import static ax.xz.fuzz.riscv.RiscvInstructionField.OPCODE;
@@ -18,27 +15,31 @@ import static ax.xz.fuzz.riscv.base.RiscvBaseRegisters.x0;
 
 public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 
-	private static RegisterDescriptor gpr(int instruction, RiscvInstructionField field) {
+	public static RegisterDescriptor gprStr(int instruction, RiscvInstructionField field) {
 		return activeArchitecture().registerByIndex(field.get(instruction) + activeArchitecture().registerIndex(x0));
 	}
 
 	@Override
 	default String disassemble(int instruction) {
 		return switch (format()) {
-			case R -> String.format("%s %s, %s, %s", mnemonic(), gpr(instruction, RD), gpr(instruction, RS1), gpr(instruction, RS2));
-			case I -> String.format("%s %s, %s, %d", mnemonic(), gpr(instruction, RD), gpr(instruction, RS1), IMM_I_UNCONSTRAINED.getSigned(instruction));
-			case I_511_20 -> String.format("%s %s, %s, %x", mnemonic(), gpr(instruction, RD), gpr(instruction, RS1), IMM_I_HIGH_20.get(instruction));
-			case I_511_0 -> String.format("%s %s, %s, %x", mnemonic(), gpr(instruction, RD), gpr(instruction, RS1), IMM_I_HIGH_CLEAR.get(instruction));
-			case S -> String.format("%s %s, %s, %x", mnemonic(), gpr(instruction, RS1), gpr(instruction, RS2), IMM_S.get(instruction));
-			case B -> String.format("%s %s, %s, %d", mnemonic(), gpr(instruction, RS1), gpr(instruction, RS2), IMM_B.getSigned(instruction));
-			case U -> String.format("%s %s, %x", mnemonic(), gpr(instruction, RD), IMM_U.get(instruction));
-			case J -> String.format("%s %s, %x", mnemonic(), gpr(instruction, RD), IMM_J.get(instruction));
+			case R -> String.format("%s %s, %s, %s", mnemonic(), gprStr(instruction, RD), gprStr(instruction, RS1), gprStr(instruction, RS2));
+			case I -> String.format("%s %s, %s, %d", mnemonic(), gprStr(instruction, RD), gprStr(instruction, RS1), IMM_I_UNCONSTRAINED.getSigned(instruction));
+			case I_SPLIT -> String.format("%s %s, %s, %x", mnemonic(), gprStr(instruction, RD), gprStr(instruction, RS1), IMM_I_04.get(instruction));
+			case S -> String.format("%s %s, %s, %x", mnemonic(), gprStr(instruction, RS1), gprStr(instruction, RS2), IMM_S.get(instruction));
+			case B -> String.format("%s %s, %s, %d", mnemonic(), gprStr(instruction, RS1), gprStr(instruction, RS2), IMM_B.getSigned(instruction));
+			case U -> String.format("%s %s, %x", mnemonic(), gprStr(instruction, RD), IMM_U.get(instruction));
+			case J -> String.format("%s %s, %x", mnemonic(), gprStr(instruction, RD), IMM_J.get(instruction));
 		};
 	}
 
 	@Override
 	default String mnemonic() {
 		return toString().toLowerCase();
+	}
+
+	@Override
+	default boolean isControlFlow() {
+		return false;
 	}
 
 	enum ArithmeticOpcode implements RiscvBaseOpcode {
@@ -99,15 +100,12 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		ArithmeticImmOpcode(int funct3, int imm511) {
-			this.format = switch (imm511) {
-				case 0x20 -> I_511_20;
-				case 0x00 -> I_511_0;
-				default -> throw new IllegalArgumentException("Invalid imm511 value: " + imm511);
-			};
+			this.format = I_SPLIT;
 
 			this.fieldConstraints = Map.of(
 				OPCODE, 0b0010011,
-				FUNCT3, funct3
+				FUNCT3, funct3,
+				IMM_I_511, imm511
 			);
 		}
 
@@ -208,7 +206,12 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		public String disassemble(int instruction, String targetLabel) {
-			return String.format("%s %s, %s, %s", mnemonic(), gpr(instruction, RS1), gpr(instruction, RS2), targetLabel);
+			return String.format("%s %s, %s, %s", mnemonic(), gprStr(instruction, RS1), gprStr(instruction, RS2), targetLabel);
+		}
+
+		@Override
+		public boolean isControlFlow() {
+			return true;
 		}
 	}
 
@@ -245,6 +248,11 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		@Override
 		public Map<RiscvInstructionField, Integer> fieldConstraints() {
 			return fieldConstraints;
+		}
+
+		@Override
+		public boolean isControlFlow() {
+			return true;
 		}
 	}
 
@@ -300,6 +308,11 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		public Map<RiscvInstructionField, Integer> fieldConstraints() {
 			return fieldConstraints;
 		}
+
+		@Override
+		public boolean isControlFlow() {
+			return true;
+		}
 	}
 
 	enum ArithmeticOpcode64 implements RiscvBaseOpcode {
@@ -350,15 +363,12 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		ArithmeticImmOpcode64(int funct3, int imm511) {
-			this.format = switch (imm511) {
-				case 0x20 -> I_511_20;
-				case 0x00 -> I_511_0;
-				default -> throw new IllegalArgumentException("Invalid imm511 value: " + imm511);
-			};
+			this.format = I_SPLIT;
 
 			this.fieldConstraints = Map.of(
 				OPCODE, 0b0011011,
-				FUNCT3, funct3
+				FUNCT3, funct3,
+				IMM_I_511, imm511
 			);
 		}
 

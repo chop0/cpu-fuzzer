@@ -16,13 +16,16 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <setjmp.h>
-#include <immintrin.h>
 #include <stdatomic.h>
 #include <fcntl.h>
 #include <sys/timerfd.h>
 #include <sys/syscall.h>
 
 #include <pthread.h>
+
+#ifdef SLAVE_AMD64
+#include <immintrin.h>
+#endif
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static int ignored_signals[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTRAP, SIGALRM };
@@ -42,7 +45,9 @@ static int tkill(int tid, int sig) {
 }
 
 static void __timer_arm(void) {
-	static struct itimerspec const test_case_timeout = { .it_value.tv_nsec = TEST_CASE_TIMEOUT_NS };
+	static struct itimerspec const test_case_timeout = {
+	.it_value.tv_sec = TEST_CASE_TIMEOUT_SEC,
+	.it_value.tv_nsec = TEST_CASE_TIMEOUT_NS };
 
 	pthread_mutex_lock(&active_thread_info[my_thread_idx].mutex);
 	if (timerfd_settime(my_timer_fd, 0, &test_case_timeout, NULL) != 0) {
@@ -99,20 +104,22 @@ static void __signal_handler_jvm(int signal, siginfo_t *si, void *ptr) {
 }
 
 static void __save_critical_registers(critical_registers_t *critical_registers) {
-#ifdef __amd64
-	active_thread_info[index].fs_base = (void *)__builtin_ia32_rdfsbase64();
-	active_thread_info[index].gs_base =(void *) __builtin_ia32_rdgsbase64();
-#elif defined(__riscv)
+#ifdef SLAVE_AMD64
+	critical_registers->fs_base = (void *)__builtin_ia32_rdfsbase64();
+	critical_registers->gs_base =(void *) __builtin_ia32_rdgsbase64();
+#elif defined(SLAVE_RISCV)
 	__asm__ volatile("mv %0, tp" : "=r"(critical_registers->tp));
 	__asm__ volatile("mv %0, gp" : "=r"(critical_registers->gp));
 #else
+#error "Unsupported architecture"
+#endif
 }
 
 static void __restore_critical_registers(critical_registers_t *critical_registers) {
-#ifdef __amd64
+#ifdef SLAVE_AMD64
 	_writefsbase_u64((uint64_t) critical_registers->fs_base);
 	_writegsbase_u64((uint64_t) critical_registers->gs_base);
-#elif defined(__riscv)
+#elif defined(SLAVE_RISCV)
 	__asm__ volatile("mv tp, %0" : : "r"(critical_registers->tp));
 	__asm__ volatile("mv gp, %0" : : "r"(critical_registers->gp));
 #else
@@ -173,7 +180,14 @@ static void __create_signal_monitor(int tid, int fd) {
 
 static int __alt_stack_index(void) {
 	void *rsp = NULL;
+#ifdef SLAVE_AMD64
 	asm volatile("mov %%rsp, %0" : "=r"(rsp));
+#elif defined(SLAVE_RISCV)
+	__asm__ volatile("mv %0, sp" : "=r"(rsp));
+#else
+#error "Unsupported architecture"
+#endif
+
 
 	int idx = ALT_STACK_IDX_FROM_LOCATION(rsp);
 	if (idx >= 0 && idx < THREAD_IDX_MAX) {
@@ -201,7 +215,7 @@ void signal_handler(int signal, siginfo_t *si, void *ptr) {
 		return;
 	}
 
-	__restore_critical_registers(index);
+	__restore_critical_registers(&active_thread_info[index].critical_registers);
 
 	assert(index == my_thread_idx);
 	active_thread_info[index].faulted = true;
@@ -246,7 +260,9 @@ static void maybe_cpu_fuzzer_setup(void) {
 
 thread_local static bool thread_init_completed = false;
 void* maybe_allocate_signal_stack(void) {
+#ifdef SLAVE_AMD64
 	assert(__builtin_ia32_rdfsbase64());
+#endif
 
 	if (thread_init_completed) {
 		return NULL;
@@ -317,7 +333,7 @@ void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 	assert(my_thread_idx >= 0);
 	assert(my_thread_idx <= THREAD_IDX_MAX);
 
-	__save_critical_registers(my_thread_idx);
+	__save_critical_registers(&active_thread_info[my_thread_idx].critical_registers);
 
 	trampoline_entrypoint_t *entrypoint = TRAMPOLINE_ENTRYPOINT(my_thread_idx);
 	active_thread_info[my_thread_idx].faulted = false;
@@ -326,7 +342,7 @@ void do_test(uint8_t *code, size_t code_length, struct execution_result *output)
 	memcpy(debug_file_address + 8, code, code_length);
 
 	__timer_arm();
-   	if (sigsetjmp(active_thread_info[my_thread_idx].jmpbuf, 1) == 0) {
+   	if (__sigsetjmp(active_thread_info[my_thread_idx].jmpbuf, 1) == 0) {
    		entrypoint(code, &output->state);
    		siglongjmp(active_thread_info[my_thread_idx].jmpbuf, 1);
 	}

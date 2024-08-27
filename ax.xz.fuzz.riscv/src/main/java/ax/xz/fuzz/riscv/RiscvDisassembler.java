@@ -26,13 +26,13 @@ public class RiscvDisassembler {
 			.filter(n -> n.isInstance(instruction))
 			.toList();
 
-		if (results.size() == 0) {
+		if (results.isEmpty()) {
 			var opcode = OPCODE.get(instruction);
 
 			throw new IllegalArgumentException("Unknown instructions: %04x (opcode 0b%s)"
 				.formatted(instruction, Integer.toBinaryString(opcode)));
 		} else if (results.size() > 1) {
-			throw new IllegalArgumentException("Ambiguous instruction: " + Integer.toHexString(instruction));
+			throw new IllegalArgumentException("Ambiguous instruction: %s.  Possibilities: %s".formatted(Integer.toHexString(instruction), results));
 		} else {
 			return results.getFirst();
 		}

@@ -1,1 +1,2 @@
-ax.xz.fuzz.x86.arch.X86Architecture
+ax.xz.fuzz.x86.arch.X86ArchitectureProvider
+ax.xz.fuzz.riscv.RiscvArchitectureProvider

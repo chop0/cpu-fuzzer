@@ -41,32 +41,31 @@ public sealed class RiscvAssemblerBase permits RiscvAssembler{
 		return new Label(null);
 	}
 
-	protected void arithmetic(RiscvBaseOpcode.ArithmeticOpcode opcode, RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, RiscvBaseRegister.Gpr rs2) {
+	public void arithmetic(RiscvBaseOpcode.ArithmeticOpcode opcode, RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, RiscvBaseRegister.Gpr rs2) {
 		instructions.add(RiscvInstructionBuilder.of(architecture, opcode)
 			.setField(RD, rd.index())
 			.setField(RS1, rs1.index())
 			.setField(RS2, rs2.index()));
 	}
 
-	protected void arithmeticImm(RiscvBaseOpcode.ArithmeticImmOpcode opcode, RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
+	public void arithmetic(RiscvBaseOpcode.ArithmeticImmOpcode opcode, RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
 		var insn = RiscvInstructionBuilder.of(architecture, opcode)
 			.setField(RD, rd.index())
 			.setField(RS1, rs1.index());
 
 		switch (opcode) {
-			case SLLI, SRLI -> insn.setField(IMM_I_HIGH_CLEAR, imm & 0b11111);
-			case SRAI -> insn.setField(IMM_I_HIGH_CLEAR, imm & 0b11111 | 0b100000);
+			case SLLI, SRLI, SRAI -> insn.setField(IMM_I_04, imm & 0b11111);
 			default -> insn.setField(IMM_I_UNCONSTRAINED, imm);
 		}
 
 		instructions.add(insn);
 	}
 
-	protected void bind(Label label) {
+	public void bind(Label label) {
 		blockLocations.put(label, instructions.size());
 	}
 
-	protected void load(RiscvBaseOpcode.LoadOpcode opcode, RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
+	public void load(RiscvBaseOpcode.LoadOpcode opcode, RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
 		instructions.add(RiscvInstructionBuilder.of(architecture, opcode)
 			.setField(RD, rd.index())
 			.setField(RS1, rs1.index())
@@ -93,14 +92,14 @@ public sealed class RiscvAssemblerBase permits RiscvAssembler{
 		}
 	}
 
-	protected void loadAddress(RiscvBaseRegister.Gpr rd, Label location) {
+	public void loadAddress(RiscvBaseRegister.Gpr rd, Label location) {
 		instructions.add(null);
 		instructions.add(null);
 
 		relocations.add(new Relocation.LoadAddress(instructions.size() - 2, location, rd));
 	}
 
-	protected void branch(RiscvBaseOpcode.BranchOpcode opcode, RiscvBaseRegister.Gpr rs1, RiscvBaseRegister.Gpr rs2, Label location) {
+	public void branch(RiscvBaseOpcode.BranchOpcode opcode, RiscvBaseRegister.Gpr rs1, RiscvBaseRegister.Gpr rs2, Label location) {
 		var builder = RiscvInstructionBuilder.of(architecture, opcode)
 			.setField(RS1, rs1.index())
 			.setField(RS2, rs2.index());
@@ -113,7 +112,7 @@ public sealed class RiscvAssemblerBase permits RiscvAssembler{
 		instructions.add(builder);
 	}
 
-	protected void jal(RiscvBaseRegister.Gpr rd, Label target) {
+	public void jal(RiscvBaseRegister.Gpr rd, Label target) {
 		var builder = RiscvInstructionBuilder.of(architecture, JAL)
 			.setField(RD, rd.index());
 
@@ -125,24 +124,24 @@ public sealed class RiscvAssemblerBase permits RiscvAssembler{
 		instructions.add(builder);
 	}
 
-	protected void j(RiscvBaseRegister.Gpr rd) {
+	public void j(RiscvBaseRegister.Gpr rd) {
 		instructions.add(RiscvInstructionBuilder.of(architecture, JAL)
 			.setField(RD, rd.index())
 			.setField(IMM_J, 0));
 	}
 
-	protected void jalr(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
+	public void jalr(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
 		instructions.add(RiscvInstructionBuilder.of(architecture, JALR)
 			.setField(RD, rd.index())
 			.setField(RS1, rs1.index())
 			.setField(IMM_I_UNCONSTRAINED, imm));
 	}
 
-	protected void data(byte[] bytes) {
+	public void data(byte[] bytes) {
 		instructions.add(RiscvInstructionBuilder.data(architecture, bytes));
 	}
 
-	protected void load(RiscvBaseOpcode.LoadOpcode opcode, RiscvBaseRegister.Gpr rd, Label location) {
+	public void load(RiscvBaseOpcode.LoadOpcode opcode, RiscvBaseRegister.Gpr rd, Label location) {
 		loadAddress(rd, location);
 		load(opcode, rd, rd, 0);
 	}
@@ -153,6 +152,7 @@ public sealed class RiscvAssemblerBase permits RiscvAssembler{
 
 	public int assemble(MemorySegment target) {
 		doRelocations();
+		int location = 0;
 
 		for (int i = 0; i < instructions.size(); i++) {
 			var insn = instructions.get(i);
@@ -160,8 +160,11 @@ public sealed class RiscvAssemblerBase permits RiscvAssembler{
 				continue;
 			}
 
-			var encoded = insn.encodeInt(i * 4L);
-			target.setAtIndex(JAVA_INT_UNALIGNED, i, encoded);
+			var encoded = insn.encode(i * 4L);
+
+			target.asSlice(location, encoded.length).copyFrom(MemorySegment.ofArray(encoded));
+			location += encoded.length;
+
 		}
 
 		return instructions.size() * 4;

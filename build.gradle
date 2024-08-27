@@ -1,5 +1,17 @@
 plugins {
+	id 'application'
 	id 'idea'
+	id 'com.github.johnrengelman.shadow' version '7.1.2'
+}
+
+application {
+	mainClass = 'ax.xz.fuzz.Master'
+}
+
+dependencies {
+	implementation project(':ax.xz.fuzz')
+	runtimeOnly project(':ax.xz.fuzz.x86')
+	runtimeOnly project(':ax.xz.fuzz.riscv')
 }
 
 repositories {

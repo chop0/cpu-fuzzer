@@ -50,6 +50,11 @@ public sealed abstract class RiscvBaseModule implements RiscvModule {
 		public List<? extends RiscvOpcode> opcodes() {
 			return RiscvBaseOpcodes.ALL_RV32I;
 		}
+
+		@Override
+		public String toString() {
+			return "rv32i";
+		}
 	}
 
 	public static final class RV64I extends RiscvBaseModule {
@@ -60,6 +65,11 @@ public sealed abstract class RiscvBaseModule implements RiscvModule {
 		@Override
 		public List<? extends RiscvOpcode> opcodes() {
 			return RiscvBaseOpcodes.ALL_RV64I;
+		}
+
+		@Override
+		public String toString() {
+			return "rv64i";
 		}
 	}
 }

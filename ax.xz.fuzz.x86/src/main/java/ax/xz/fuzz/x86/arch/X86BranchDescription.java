@@ -31,6 +31,14 @@ public enum X86BranchDescription implements BranchDescription {
 		this.perform = perform;
 	}
 
+	@Override
+	public String asAssembler(int takenIndex, int notTakenIndex) {
+		return """
+			%s block_%d
+			jmp block_%d
+			""".formatted(this, takenIndex, notTakenIndex);
+	}
+
 	@JsonCreator
 	public static X86BranchDescription fromString(String name) {
 		return valueOf(name);

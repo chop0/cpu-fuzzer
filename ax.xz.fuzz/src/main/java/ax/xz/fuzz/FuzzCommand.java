@@ -74,7 +74,6 @@ public class FuzzCommand implements Callable<Void> {
 	public Void call() throws IOException, ExecutionException {
 		// TODO: configure mutators from command line
 		var config = new Config(activeArchitecture().allMutators(), threadCount, blockCount, maxInstructionCount, branchLimit,  activeArchitecture().defaultCounter());
-
 		var host = new InetSocketAddress(metricsHost, metricsPort);
 
 		try (var metrics = new NetMetrics(host); var sts = new StructuredTaskScope.ShutdownOnFailure("Fuzzing", Thread.ofPlatform().factory())) {

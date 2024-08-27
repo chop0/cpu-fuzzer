@@ -15,8 +15,8 @@ public enum RiscvBaseField implements RiscvInstructionField {
 	FUNCT7(7),
 
 	IMM_I_UNCONSTRAINED(12),
-	IMM_I_HIGH_20(12),
-	IMM_I_HIGH_CLEAR(12),
+	IMM_I_511(7),
+	IMM_I_04(5),
 
 	IMM_S(12),
 	IMM_B(12),
@@ -54,23 +54,9 @@ public enum RiscvBaseField implements RiscvInstructionField {
 			case FUNCT7 -> pickBits(instruction, 25, 31);
 
 			case IMM_I_UNCONSTRAINED -> pickBits(instruction, 20, 31);
-			case IMM_I_HIGH_20 -> {
-				int imm = pickBits(instruction, 20, 31);
+			case IMM_I_04 -> pickBits(instruction, 20, 24);
 
-				if (pickBits(imm, 5, 11) != 0x20)
-					throw new IllegalArgumentException("Invalid IMM_I_HIGH_20 value: " + imm);
-
-				yield imm & ~(0x20 << 5);
-			}
-
-			case IMM_I_HIGH_CLEAR -> {
-				int imm = pickBits(instruction, 20, 31);
-
-				if (pickBits(imm, 5, 11) != 0)
-					throw new IllegalArgumentException("Invalid IMM_I_HIGH_CLEAR value: " + imm);
-
-				yield imm;
-			}
+			case IMM_I_511 -> pickBits(instruction, 25, 31);
 
 			case IMM_S -> pickBits(instruction, 7, 11) | (pickBits(instruction, 25, 31) << 5);
 			case IMM_B -> pickBits(instruction, 7, 7) << 11 | pickBits(instruction, 8, 11) << 1 | pickBits(instruction, 25, 30) << 5 | pickBits(instruction, 31, 31) << 12;
@@ -96,17 +82,9 @@ public enum RiscvBaseField implements RiscvInstructionField {
 			case FUNCT7 -> setBits(instruction, 25, 31, value);
 
 			case IMM_I_UNCONSTRAINED -> setBits(instruction, 20, 31, value);
-			case IMM_I_HIGH_20 -> {
-				value |= 0x20 << 5;
+			case IMM_I_511 -> setBits(instruction, 25, 31, value);
 
-				yield setBits(instruction, 20, 31, value);
-			}
-
-			case IMM_I_HIGH_CLEAR -> {
-				value &= ~(0x20 << 5);
-
-				yield setBits(instruction, 20, 31, value);
-			}
+			case IMM_I_04 -> setBits(instruction, 20, 24, value);
 
 			case IMM_S -> setBits(
 				setBits(instruction, 7, 11, pickBits(value, 0, 4)),
@@ -147,8 +125,8 @@ public enum RiscvBaseField implements RiscvInstructionField {
 			case RD, RS1, RS2 -> a.registerIndex(resourcePartition.selectRegister(builder.architecture().gprs(), rng));
 			case 	IMM_S, IMM_B, IMM_U, IMM_J,
 				IMM_I_UNCONSTRAINED -> rng.nextInt() & ((1 << (width + 1)) - 1);
-			case IMM_I_HIGH_20 -> rng.nextInt() & ((1 << 6) - 1) | (0x20 << 5);
-			case IMM_I_HIGH_CLEAR -> rng.nextInt() & ((1 << 6) - 1);
+			case IMM_I_04 -> rng.nextInt() & ((1 << 5) - 1);
+			case IMM_I_511 -> rng.nextInt() & ((1 << 7) - 1);
 
 			case FUNCT3, FUNCT7 -> throw new UnsupportedOperationException("Cannot select value for funct3 or funct7");
 		};
@@ -161,7 +139,7 @@ public enum RiscvBaseField implements RiscvInstructionField {
 		return switch (this) {
 			case RD, RS1, RS2 -> !rp.allowedRegisters().isEmpty();
 			case FUNCT3, FUNCT7 -> true;
-			case IMM_S, IMM_B, IMM_U, IMM_J, IMM_I_UNCONSTRAINED, IMM_I_HIGH_20, IMM_I_HIGH_CLEAR -> true;
+			case IMM_S, IMM_B, IMM_U, IMM_J, IMM_I_UNCONSTRAINED, IMM_I_04, IMM_I_511 -> true;
 		};
 	}
 }

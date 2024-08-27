@@ -83,7 +83,6 @@ public record RecordedTestCase(
 			public BranchDescription deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
 				return p.readValueAs(activeArchitecture().unconditionalJump().getClass());
 			}
-
 		}
 
 		try {

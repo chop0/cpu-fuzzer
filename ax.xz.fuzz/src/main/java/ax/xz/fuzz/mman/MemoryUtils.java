@@ -8,13 +8,19 @@ import java.lang.foreign.MemorySegment;
 import static ax.xz.fuzz.mman.gen.MmanNative.*;
 
 public class MemoryUtils {
+	private static final int MAP_ANONYMOUS = switch (System.getProperty("os.arch")) {
+		case "riscv64" -> 0x20;
+		case "x86_64" -> 4096;
+		default -> throw new UnsupportedOperationException("Unsupported architecture");
+	};
+
 	public static MemorySegment mmap(Arena arena, MemorySegment address, long size, Protection... prot) {
 		int protValue = 0;
 		for (Protection p : prot) {
 			protValue |= p.value;
 		}
 
-		int flags = MAP_PRIVATE() | MAP_ANONYMOUS();
+		int flags = MAP_PRIVATE() | MAP_ANONYMOUS;
 		if (address != MemorySegment.NULL) {
 			flags |= MAP_FIXED();
 		}

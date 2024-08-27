@@ -19,10 +19,12 @@ import java.lang.foreign.MemorySegment;
 import java.util.*;
 import java.util.random.RandomGenerator;
 
-import static ax.xz.fuzz.riscv.RiscvBranch.RiscvBranchType.J;
 import static ax.xz.fuzz.riscv.base.RiscvBaseRegisters.x0;
 import static ax.xz.fuzz.riscv.base.RiscvBaseRegisters.x10;
-import static ax.xz.fuzz.x86.tester.slave_h.trampoline_return_address;
+import static ax.xz.fuzz.riscv.tester.slave_h.trampoline_return_address;
+
+import static ax.xz.fuzz.runtime.ExecutionResult.*;
+
 
 public class RiscvArchitecture implements Architecture {
 	public static int INSTRUCTION_WIDTH_BITS = 32;
@@ -32,10 +34,9 @@ public class RiscvArchitecture implements Architecture {
 	private final Opcode[] allOpcodes;
 
 	private final List<RiscvRegister> registers;
-	private RegisterSet registersSet;
 	private final Map<RiscvRegister, Integer> registerIndices;
 	private final Map<String, RiscvRegister> registerNames;
-
+	private RegisterSet registersSet;
 	private RegisterSet gprs;
 
 	public RiscvArchitecture(RiscvBaseModule baseModule, RiscvModule... otherModules) {
@@ -63,8 +64,9 @@ public class RiscvArchitecture implements Architecture {
 		this.registers = Collections.unmodifiableList(registers);
 		this.registerIndices = Collections.unmodifiableMap(registerIndices);
 		this.registerNames = Collections.unmodifiableMap(registerNames);
-		this.allOpcodes = modules.stream().flatMap(n -> n.opcodes().stream()).toArray(Opcode[]::new);
-
+		this.allOpcodes = modules.stream().flatMap(n -> n.opcodes().stream())
+			.filter(n -> !n.isControlFlow())
+			.toArray(Opcode[]::new);
 	}
 
 	@Override
@@ -77,6 +79,11 @@ public class RiscvArchitecture implements Architecture {
 		return registerNames.get(name);
 	}
 
+	@Override
+	public RegisterSet trackedRegisters() {
+		return registersSet();
+	}
+
 	public RegisterSet registersSet() {
 		if (registersSet == null) {
 			this.registersSet = RegisterSet.of(registers.toArray(new RegisterDescriptor[0]));
@@ -84,11 +91,6 @@ public class RiscvArchitecture implements Architecture {
 		}
 
 		return registersSet;
-	}
-
-	@Override
-	public RegisterSet trackedRegisters() {
-		return registersSet();
 	}
 
 	@Override
@@ -118,31 +120,29 @@ public class RiscvArchitecture implements Architecture {
 
 	@Override
 	public ExecutionResult runSegment(MemorySegment code, CPUState initialState) {
-		return null;
+		return new RiscvTestExecutor(this).runCode(gprs, code, initialState);
+	}
+
+	@Override
+	public BranchDescription unconditionalJump() {
+		return RiscvBranch.unconditional();
 	}
 
 	@Override
 	public BranchDescription randomBranchType(ResourcePartition master, RandomGenerator rng) throws NoPossibilitiesException {
 		var types = RiscvBranch.RiscvBranchType.values();
-		var type = types[rng.nextInt(types.length)];
 
-		if (!master.allowedRegisters().intersects(gprs))
-			type = J;
+		int idx = rng.nextInt(types.length + 1);
+		if (idx == types.length || !master.allowedRegisters().intersects(gprs))
+			return RiscvBranch.unconditional();
 
-		if (type == J)
-			return new RiscvBranch(J, null, null);
+		var type = types[idx];
 
-		var rs1 = (RiscvBaseRegister.Gpr)master.selectRegister(gprs, rng);
-		var rs2 = (RiscvBaseRegister.Gpr)master.selectRegister(gprs, rng);
+		var rs1 = (RiscvBaseRegister.Gpr) master.selectRegister(gprs, rng);
+		var rs2 = (RiscvBaseRegister.Gpr) master.selectRegister(gprs, rng);
 
 		return new RiscvBranch(type, rs1, rs2);
 	}
-
-	@Override
-	public BranchDescription unconditionalJump() {
-		return new RiscvBranch(J, null, null);
-	}
-
 
 	@Override
 	public Mutator[] allMutators() {
@@ -189,8 +189,7 @@ public class RiscvArchitecture implements Architecture {
 			}
 
 			switch (branches[i].type()) {
-				case RiscvBranch t ->
-					t.perform(blockAssembler, blockHeaders[branches[i].takenIndex()]);
+				case RiscvBranch t -> t.perform(blockAssembler, blockHeaders[branches[i].takenIndex()]);
 				default ->
 					throw new IllegalArgumentException("Unknown branch type (are you trying to replay a test case from the wrong architecture?): " + branches[i].type());
 			}
@@ -207,17 +206,45 @@ public class RiscvArchitecture implements Architecture {
 
 	@Override
 	public String disassemble(byte[] code) {
-		return "";
+		return new RiscvDisassembler(architecture()).disassemble(code);
 	}
 
 	@Override
 	public boolean interestingMismatch(ExecutionResult a, ExecutionResult b) {
-		return false;
+		if (a.equals(b))
+			return false;
+
+		record MismatchSet(ExecutionResult a, ExecutionResult b) {
+		}
+
+		return switch (new MismatchSet(a, b)) {
+			case MismatchSet(Success _, _),
+			     MismatchSet(_, Success _) -> true;
+
+			case MismatchSet(Fault _, Fault _)
+				when !a.getClass().equals(b.getClass()) -> true;
+
+			case MismatchSet(Fault.Sigalrm _, _),
+			     MismatchSet(_, Fault.Sigalrm _) -> true;
+
+			case MismatchSet(Fault _, Fault _) -> false;
+
+			default -> throw new MatchException("what the fuck " + a + " " + b, new Exception());
+		};
 	}
 
 	@Override
 	public int registerIndex(RegisterDescriptor descriptor) {
 		return registerIndices.get(descriptor);
+	}
+
+	private RiscvArchitecture architecture() {
+		var active = activeArchitecture.orElseThrow(() -> new UnsupportedOperationException("No active architecture"));
+
+		return switch (active) {
+			case RiscvArchitecture a -> a;
+			default -> throw new UnsupportedOperationException("Active architecture is not RISC-V");
+		};
 	}
 
 	public RegisterSet gprs() {
@@ -229,5 +256,12 @@ public class RiscvArchitecture implements Architecture {
 
 	public RiscvBaseModule baseModule() {
 		return baseModule;
+	}
+
+	@Override
+	public String toString() {
+		return new StringJoiner(", ", baseModule.toString() + "[", "]")
+			.add("modules=" + modules)
+			.toString();
 	}
 }

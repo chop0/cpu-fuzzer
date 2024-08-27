@@ -3,9 +3,11 @@ package ax.xz.fuzz.x86.arch;
 import ax.xz.fuzz.arch.Architecture;
 import ax.xz.fuzz.arch.BranchDescription;
 import ax.xz.fuzz.arch.CPUState;
+import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.instruction.Opcode;
 import ax.xz.fuzz.instruction.RegisterDescriptor;
 import ax.xz.fuzz.instruction.RegisterSet;
+import ax.xz.fuzz.instruction.ResourcePartition;
 import ax.xz.fuzz.mutate.Mutator;
 import ax.xz.fuzz.runtime.Config;
 import ax.xz.fuzz.runtime.ExecutableSequence;
@@ -26,7 +28,10 @@ import com.github.icedland.iced.x86.fmt.StringOutput;
 import com.github.icedland.iced.x86.fmt.nasm.NasmFormatter;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
+import java.util.random.RandomGenerator;
 
 import static ax.xz.fuzz.x86.arch.x86RegisterBanks.*;
 import static ax.xz.fuzz.x86.arch.x86RegisterDescriptor.*;
@@ -109,8 +114,8 @@ public class X86Architecture implements Architecture {
 	}
 
 	@Override
-	public BranchDescription[] allBranchTypes() {
-		return X86BranchDescription.values();
+	public BranchDescription randomBranchType(ResourcePartition master, RandomGenerator rng) {
+		return X86BranchDescription.values()[rng.nextInt(X86BranchDescription.values().length)]; // TODO: support proper resource partition management
 	}
 
 	@Override
@@ -233,6 +238,22 @@ public class X86Architecture implements Architecture {
 		private static final X86Architecture INSTANCE;
 
 		static {
+			try (var libraryPath = X86Architecture.class.getClassLoader().getResourceAsStream("libmain.x86_64.so")) {
+				var tempFile = Files.createTempFile("libmain.x86_64", ".so");
+				Files.copy(libraryPath, tempFile, StandardCopyOption.REPLACE_EXISTING);
+
+				System.load(tempFile.toString());
+				Runtime.getRuntime().addShutdownHook(Thread.ofVirtual().unstarted(() -> {
+					try {
+						Files.delete(tempFile);
+					} catch (Exception e) {
+						e.printStackTrace();
+					}
+				}));
+			} catch (Exception e) {
+				throw new RuntimeException("Failed to load native library", e);
+			}
+
 			INSTANCE = new X86Architecture(X86UarchInfo.loadNativeInfo());
 			System.out.println("Loaded local uarch: " + INSTANCE.uarchInfo);
 		}

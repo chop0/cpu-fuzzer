@@ -27,8 +27,8 @@ public class RiscvInstructionBuilder implements InstructionBuilder {
 	public int encodeInt(long pc) {
 		int instruction = 0;
 		for (RiscvInstructionField field : opcode.format().fields()) {
-			if (!fieldValues.containsKey(field)) {
-				throw new IllegalStateException("Field " + field + " is not set");
+			if (!fieldValues.containsKey(field) || fieldValues.get(field) == null) {
+				throw new IllegalStateException("Field %s is not set on opcode %s[encoding %s]".formatted(field, opcode, opcode.format()));
 			}
 
 			instruction = field.apply(instruction, fieldValues.get(field));
@@ -44,12 +44,6 @@ public class RiscvInstructionBuilder implements InstructionBuilder {
 
 	public static RiscvInstructionBuilder of(RiscvArchitecture architecture, RiscvOpcode opcode) {
 		var fieldValues = new HashMap<>(opcode.fieldConstraints());
-
-		for (RiscvInstructionField field : opcode.format().fields()) {
-			if (!fieldValues.containsKey(field)) {
-				fieldValues.put(field, null);
-			}
-		}
 
 		return new RiscvInstructionBuilder(architecture, opcode, opcode.fieldConstraints().keySet(), fieldValues);
 	}
@@ -79,8 +73,8 @@ public class RiscvInstructionBuilder implements InstructionBuilder {
 	}
 
 	public RiscvInstructionBuilder setField(RiscvInstructionField field, int value) {
-		if (!fieldValues.containsKey(field)) {
-			throw new IllegalArgumentException("Field " + field + " is not present in the opcode");
+		if (!opcode.format().fields().contains(field)) {
+			throw new IllegalArgumentException("Field %s is not present in opcode %s[encoding %s]".formatted(field, opcode, opcode.format()));
 		}
 
 		fieldValues.put(field, value);

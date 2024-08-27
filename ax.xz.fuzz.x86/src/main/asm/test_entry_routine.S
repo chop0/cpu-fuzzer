@@ -1,76 +1,76 @@
-.att_syntax
+.intel_syntax noprefix
 .global trampoline_begin
 .global trampoline_entrypoint
 .global trampoline_exitpoint
 .global trampoline_end
 
 .macro push_unclobberable_gprs
-    push %r12
-    push %r13
-    push %r14
-    push %r15
-    push %rbx
-    push %rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbx
+    push rbp
     pushfq
 .endm
 
 .macro pop_unclobberable_gprs
     popfq
-    pop %rbp
-    pop %rbx
-    pop %r15
-    pop %r14
-    pop %r13
-    pop %r12
+    pop rbp
+    pop rbx
+    pop r15
+    pop r14
+    pop r13
+    pop r12
 .endm
 
 .macro store_mxcsr op
-    sub $0x8, %rsp
-    movq $0, (%rsp)
-    stmxcsr (%rsp)
-    popq %\op
+    sub rsp, 8
+    mov qword ptr [rsp], 0
+    stmxcsr [rsp]
+    popq \op
 .endm
 
 .macro load_mxcsr op
-    pushq %\op
-    ldmxcsr (%rsp)
-    add $0x8, %rsp
+    pushq \op
+    ldmxcsr [rsp]
+    add rsp, 8
 .endm
 
 .macro mask_mxcsr_and_push_old
     store_mxcsr r12
-    push %r12
-    or $0x1F80, %r12
+    push r12
+    or r12, 0x1F80
     load_mxcsr r12
 .endm
 
 .macro pop_old_mxcsr
-    ldmxcsr (%rsp)
-    add $0x8, %rsp
+    ldmxcsr [rsp]
+    add rsp, 8
 .endm
 
 .macro mask_fenv_and_push_old
-    sub $28, %rsp
-    fnstenv (%rsp)
+    sub rsp, 28
+    fnstenv [rsp]
 .endm
 
 .macro pop_old_fenv
-    fldenv (%rsp)
-    add $28, %rsp
+    fldenv [rsp]
+    add rsp, 28
 .endm
 
 .macro save_fs_gs_base
-    rdgsbase %r12
-    movq %r12, saved_gs(%rip)
-    rdfsbase %r12
-    movq %r12, saved_fs(%rip)
+    rdgsbase r12
+    mov qword ptr [rip+saved_gs], r12
+    rdfsbase r12
+    mov qword ptr [rip+saved_fs], r12
 .endm
 
 .macro restore_fs_gs_base
-    movq saved_fs(%rip), %r12
-    wrfsbase %r12
-    movq saved_gs(%rip), %r12
-    wrgsbase %r12
+    mov r12, qword ptr [rip+saved_fs]
+    wrfsbase r12
+    mov r12, qword ptr [rip+saved_gs]
+    wrgsbase r12
 .endm
 
 .macro save_unclobberable_state
@@ -78,11 +78,11 @@
     mask_mxcsr_and_push_old
     mask_fenv_and_push_old
     save_fs_gs_base
-    movq %rsp, saved_rsp(%rip)
+    mov qword ptr [rip+saved_rsp], rsp
 .endm
 
 .macro restore_unclobberable_state
-    movq saved_rsp(%rip), %rsp
+    mov rsp, qword ptr [rip+saved_rsp]
     restore_fs_gs_base
     pop_old_fenv
     pop_old_mxcsr
@@ -92,14 +92,14 @@
 .altmacro
 
 .macro write_vector_regs_ bank, start, end, size, offset=0
-    vmovups %\bank\start, offset (%r15)
+    vmovups \bank\start, [r15+offset]
     .if \end-\start
-        write_vector_regs_ bank, %(start+1), \end, \size, (\offset+\size)
+        write_vector_regs_ bank, %(\start+1), \end, \size, %(\offset+\size)
     .endif
 .endm
 
 .macro read_vector_regs_ bank, start, end, size, offset=0
-    vmovups offset (%r15), %\bank\start
+    vmovups [r15+offset], \bank\start
     .if \end-\start
         read_vector_regs_ bank, %(\start+1), \end, \size, %(\offset+\size)
     .endif
@@ -111,33 +111,33 @@
     LOCAL sse
     LOCAL done
 
-    mov $0x7, %eax
-    xor %ecx, %ecx
+    mov eax, 0x7
+    xor ecx, ecx
     cpuid
-    btl $16, %ebx
+    bt ebx, 16
     jc avx512
 
-    mov $0x1, %eax
-    xor %ecx, %ecx
+    mov eax, 0x1
+    xor ecx, ecx
     cpuid
-    btl $28, %ecx
+    bt ecx, 28
     jc avx
 
-    btl $25, %edx
+    bt edx, 25
     jc sse
 
     jmp done
 
 avx512:
     func zmm, 0, 31, 64, offset
-    kxorq %k0, %k0, %k0
-	kxorq %k1, %k1, %k1
-	kxorq %k2, %k2, %k2
-	kxorq %k3, %k3, %k3
-	kxorq %k4, %k4, %k4
-	kxorq %k5, %k5, %k5
-	kxorq %k6, %k6, %k6
-	kxorq %k7, %k7, %k7
+    kxorq k0, k0, k0
+    kxorq k1, k1, k1
+    kxorq k2, k2, k2
+    kxorq k3, k3, k3
+    kxorq k4, k4, k4
+    kxorq k5, k5, k5
+    kxorq k6, k6, k6
+    kxorq k7, k7, k7
     jmp done
 
 avx:
@@ -174,88 +174,87 @@ saved_state:
 temp:
     .quad 0
 
-
 trampoline_entrypoint:
-    movq %rdi, addr(%rip)
-    movq %rsi, saved_state(%rip)
+    mov rdi, qword ptr [rip+addr]
+    mov rsi, qword ptr [rip+saved_state]
 
     save_unclobberable_state
 
-    movq saved_state(%rip), %r15
+    mov r15, qword ptr [rip+saved_state]
     read_vector_regs 144
-    movq 2192(%r15), %mm0
-    movq 2200(%r15), %mm1
-    movq 2208(%r15), %mm2
-    movq 2216(%r15), %mm3
-    movq 2224(%r15), %mm4
-    movq 2232(%r15), %mm5
-    movq 2240(%r15), %mm6
-    movq 2248(%r15), %mm7
+    movq mm0, qword ptr [r15+2192]
+    movq mm1, qword ptr [r15+2200]
+    movq mm2, qword ptr [r15+2208]
+    movq mm3, qword ptr [r15+2216]
+    movq mm4, qword ptr [r15+2224]
+    movq mm5, qword ptr [r15+2232]
+    movq mm6, qword ptr [r15+2240]
+    movq mm7, qword ptr [r15+2248]
 
-    movq 0(%r15), %rax
-    wrfsbase %rax
-    movq 8(%r15), %rax
-    wrgsbase %rax
-    movq 16(%r15), %rax
-    movq 24(%r15), %rbx
-    movq 32(%r15), %rcx
-    movq 40(%r15), %rdx
-    movq 48(%r15), %rsi
-    movq 56(%r15), %rdi
-    movq 64(%r15), %rbp
-    movq 72(%r15), %r8
-    movq 80(%r15), %r9
-    movq 88(%r15), %r10
-    movq 96(%r15), %r11
-    movq 104(%r15), %r12
-    movq 112(%r15), %r13
-    movq 120(%r15), %r14
-    lea 2256(%r15), %rsp
+    mov rax, qword ptr [r15]
+    wrfsbase rax
+    mov rax, qword ptr [r15+8]
+    wrgsbase rax
+    mov rax, qword ptr [r15+16]
+    mov rbx, qword ptr [r15+24]
+    mov rcx, qword ptr [r15+32]
+    mov rdx, qword ptr [r15+40]
+    mov rsi, qword ptr [r15+48]
+    mov rdi, qword ptr [r15+56]
+    mov rbp, qword ptr [r15+64]
+    mov r8, qword ptr [r15+72]
+    mov r9, qword ptr [r15+80]
+    mov r10, qword ptr [r15+88]
+    mov r11, qword ptr [r15+96]
+    mov r12, qword ptr [r15+104]
+    mov r13, qword ptr [r15+112]
+    mov r14, qword ptr [r15+120]
+    lea rsp, [r15+2256]
     popfq
-    movq 136(%r15), %rsp
-    movq 128(%r15), %r15
+    mov rsp, qword ptr [r15+136]
+    mov r15, qword ptr [r15+128]
 
 
-    jmp *addr(%rip)
+    jmp qword ptr [rip+addr]
 trampoline_exitpoint:
 
-    movq %r15, temp(%rip)
-    movq saved_state(%rip), %r15
-    movq %rax, 16(%r15)
-    rdfsbase %rax
-    movq %rax, 0(%r15)
-    rdgsbase %rax
-    movq %rax, 8(%r15)
+    mov r15, qword ptr [rip+temp]
+    mov r15, qword ptr [rip+saved_state]
+    mov rax, 16[r15]
+    rdfsbase rax
+    mov qword ptr [r15], rax
+    rdgsbase rax
+    mov qword ptr [r15+8], rax
 
-    movq %rbx, 24(%r15)
-    movq %rcx, 32(%r15)
-    movq %rdx, 40(%r15)
-    movq %rsi, 48(%r15)
-    movq %rdi, 56(%r15)
-    movq %rbp, 64(%r15)
-    movq %r8, 72(%r15)
-    movq %r9, 80(%r15)
-    movq %r10, 88(%r15)
-    movq %r11, 96(%r15)
-    movq %r12, 104(%r15)
-    movq %r13, 112(%r15)
-    movq %r14, 120(%r15)
-    movq temp(%rip), %rax
-    movq %rax, 128(%r15)
-    movq %rsp, 136(%r15)
+    mov rbx, qword ptr [r15+24]
+    mov rcx, qword ptr [r15+32]
+    mov rdx, qword ptr [r15+40]
+    mov rsi, qword ptr [r15+48]
+    mov rdi, qword ptr [r15+56]
+    mov rbp, qword ptr [r15+64]
+    mov r8, qword ptr [r15+72]
+    mov r9, qword ptr [r15+80]
+    mov r10, qword ptr [r15+88]
+    mov r11, qword ptr [r15+96]
+    mov r12, qword ptr [r15+104]
+    mov r13, qword ptr [r15+112]
+    mov r14, qword ptr [r15+120]
+    mov rax, qword ptr [rip+temp]
+    mov qword ptr [r15+128], rax
+    mov rsp, qword ptr [r15+136]
 
-    lea 2264(%r15), %rsp
+    lea rsp, [r15+2264]
     pushfq
 
     write_vector_regs 144
-    movq %mm0, 2192(%r15)
-    movq %mm1, 2200(%r15)
-    movq %mm2, 2208(%r15)
-    movq %mm3, 2216(%r15)
-    movq %mm4, 2224(%r15)
-    movq %mm5, 2232(%r15)
-    movq %mm6, 2240(%r15)
-    movq %mm7, 2248(%r15)
+    movq qword ptr [r15+2192], mm0
+    movq qword ptr [r15+2200], mm1
+    movq qword ptr [r15+2208], mm2
+    movq qword ptr [r15+2216], mm3
+    movq qword ptr [r15+2224], mm4
+    movq qword ptr [r15+2232], mm5
+    movq qword ptr [r15+2240], mm6
+    movq qword ptr [r15+2248], mm7
 
     restore_unclobberable_state
     ret

@@ -7,7 +7,6 @@ import java.nio.ByteBuffer;
 import static ax.xz.fuzz.riscv.base.RiscvBaseOpcode.ArithmeticImmOpcode.*;
 import static ax.xz.fuzz.riscv.base.RiscvBaseOpcode.ArithmeticOpcode.*;
 import static ax.xz.fuzz.riscv.base.RiscvBaseOpcode.BranchOpcode.*;
-import static ax.xz.fuzz.riscv.base.RiscvBaseOpcode.JumpOpcode.JAL;
 import static ax.xz.fuzz.riscv.base.RiscvBaseOpcode.LoadOpcode.*;
 import static ax.xz.fuzz.riscv.base.RiscvBaseRegisters.x0;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
@@ -59,39 +58,39 @@ public final class RiscvAssembler extends RiscvAssemblerBase {
 	}
 
 	public void addi(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(ADDI, rd, rs1, imm);
+		arithmetic(ADDI, rd, rs1, imm);
 	}
 
 	public void xori(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(XORI, rd, rs1, imm);
+		arithmetic(XORI, rd, rs1, imm);
 	}
 
 	public void ori(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(ORI, rd, rs1, imm);
+		arithmetic(ORI, rd, rs1, imm);
 	}
 
 	public void andi(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(ANDI, rd, rs1, imm);
+		arithmetic(ANDI, rd, rs1, imm);
 	}
 
 	public void slli(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(SLLI, rd, rs1, imm);
+		arithmetic(SLLI, rd, rs1, imm);
 	}
 
 	public void srli(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(SRLI, rd, rs1, imm);
+		arithmetic(SRLI, rd, rs1, imm);
 	}
 
 	public void srai(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(SRAI, rd, rs1, imm);
+		arithmetic(SRAI, rd, rs1, imm);
 	}
 
 	public void slti(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(SLTI, rd, rs1, imm);
+		arithmetic(SLTI, rd, rs1, imm);
 	}
 
 	public void sltiu(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {
-		arithmeticImm(SLTIU, rd, rs1, imm);
+		arithmetic(SLTIU, rd, rs1, imm);
 	}
 
 	public void lb(RiscvBaseRegister.Gpr rd, RiscvBaseRegister.Gpr rs1, int imm) {

@@ -13,6 +13,16 @@ java {
 	targetCompatibility = "22.PREVIEW"
 }
 
+sourceSets {
+	main {
+		resources {
+			srcDir 'src/main/resources'
+			srcDir "${project.layout.buildDirectory.asFile.get().toPath()}/lib/"
+		}
+	}
+}
+
+
 repositories {
 	mavenCentral()
 }
@@ -31,7 +41,7 @@ test {
 jextract {
 	header("${project.projectDir}/src/main/headers/slave.h") {
 		libraries = ['slave']
-		targetPackage = 'ax.xz.fuzz.x86.tester'
+		targetPackage = 'ax.xz.fuzz.riscv.tester'
 		className = "slave_h"
 		functions = ['trampoline_return_address', 'maybe_allocate_signal_stack', 'do_test']
 		constants = ['ILL_ILLOPC',
@@ -43,8 +53,10 @@ jextract {
 			     'ILL_COPROC',
 			     'ILL_BADSTK'
 		]
-		useSystemLoadLibrary = true
-		libraries = ['main']
+		useSystemLoadLibrary = false
+		libraries = []
+
+		definedMacros = ['SLAVE_RISCV']
 
 		variables = ['routine_begin', 'routine_end']
 		structs = ['fault_details', 'execution_result', 'saved_state']
@@ -52,40 +64,51 @@ jextract {
 }
 
 def copyRiscv64SharedLibrary = tasks.register("makeRiscv64SharedLibrary") {
-	def sharedFile = tasks.named("linkMainSharedLibrary").outputs.files.filter { it.name.contains("libmain.so") }.singleFile
 	dependsOn(tasks.linkMainSharedLibrary)
+
+	def sharedFile = tasks.named("linkMainSharedLibrary").get().outputs.files.filter { it.name.contains("libmain.so") }.singleFile
+	def dstDir = project.layout.buildDirectory.asFile.get().toPath().resolve("lib")
+
 	inputs.file(sharedFile)
-	outputs.file("${project.layout.buildDirectory.asFile.get().toPath()}/libmain.so")
+	outputs.dir(dstDir)
 
 	doLast {
+		mkdir(dstDir)
 		copy {
 			from sharedFile
-			into project.layout.buildDirectory.asFile.get()
+			into dstDir
+
+			rename { "libmain.riscv64.so"}
 		}
 	}
 }
 
+processResources.dependsOn(copyRiscv64SharedLibrary)
+
 tasks.withType(JavaCompile).configureEach {
 	dependsOn copyRiscv64SharedLibrary
+	it.options.compilerArgs.add('--enable-preview')
 }
 
 model {
+
 	toolChains {
 		my_gcc(Gcc) {
-			path System.getProperty('user.home') + '/bin/dockcross-linux-riscv64'
-
 			target("linux_riscv64") {
-				cCompiler.executable = "dockcross-linux-riscv64-gcc"
-				cppCompiler.executable = "dockcross-linux-riscv64-gcc"
-				assembler.executable = "dockcross-linux-riscv64-gcc"
-				linker.executable = "dockcross-linux-riscv64-gcc"
+				cCompiler.executable = "riscv64-unknown-linux-gnu-gcc"
+				cppCompiler.executable = "riscv64-unknown-linux-gnu-gcc"
+				assembler.executable = "riscv64-unknown-linux-gnu-gcc"
+				linker.executable = "riscv64-unknown-linux-gnu-gcc"
 			}
 
 			eachPlatform {
 				cCompiler.withArguments { args ->
 					args << "-g"
+					args << "-gdwarf-5"
 					args << "-Wl,-z,relro"
 					args << "-Wl,-z,now"
+					args << "-DSLAVE_RISCV"
+					args << "-fPIC"
 				}
 			}
 		}
@@ -101,7 +124,19 @@ model {
 	components {
 		main(NativeLibrarySpec) {
 			targetPlatform "linux_riscv64"
+
+			// add the include path
+			sources {
+				c {
+					source {
+						srcDirs 'src/main/c'
+					}
+
+					exportedHeaders {
+						srcDirs 'src/main/headers', "${project.layout.buildDirectory.asFile.get().toPath()}/include"
+					}
+				}
+			}
 		}
 	}
-
 }
