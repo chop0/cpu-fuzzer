@@ -6,7 +6,7 @@ import ax.xz.fuzz.riscv.base.RiscvBaseField;
 
 import java.util.random.RandomGenerator;
 
-public sealed interface RiscvInstructionField permits RiscvInstructionField.OpcodeField, RiscvBaseField {
+public interface RiscvInstructionField {
 	String name();
 
 	int width();

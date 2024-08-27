@@ -1,6 +1,6 @@
 package ax.xz.fuzz.riscv.base;
 
-import ax.xz.fuzz.instruction.RegisterDescriptor;
+import ax.xz.fuzz.riscv.InstructionUtils;
 import ax.xz.fuzz.riscv.RiscvInstructionField;
 import ax.xz.fuzz.riscv.RiscvInstructionFormat;
 import ax.xz.fuzz.riscv.RiscvOpcode;
@@ -11,24 +11,19 @@ import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 import static ax.xz.fuzz.riscv.RiscvInstructionField.OPCODE;
 import static ax.xz.fuzz.riscv.base.RiscvBaseField.*;
 import static ax.xz.fuzz.riscv.base.RiscvBaseFormat.*;
-import static ax.xz.fuzz.riscv.base.RiscvBaseRegisters.x0;
 
 public sealed interface RiscvBaseOpcode extends RiscvOpcode {
-
-	public static RegisterDescriptor gprStr(int instruction, RiscvInstructionField field) {
-		return activeArchitecture().registerByIndex(field.get(instruction) + activeArchitecture().registerIndex(x0));
-	}
 
 	@Override
 	default String disassemble(int instruction) {
 		return switch (format()) {
-			case R -> String.format("%s %s, %s, %s", mnemonic(), gprStr(instruction, RD), gprStr(instruction, RS1), gprStr(instruction, RS2));
-			case I -> String.format("%s %s, %s, %d", mnemonic(), gprStr(instruction, RD), gprStr(instruction, RS1), IMM_I_UNCONSTRAINED.getSigned(instruction));
-			case I_SPLIT -> String.format("%s %s, %s, %x", mnemonic(), gprStr(instruction, RD), gprStr(instruction, RS1), IMM_I_04.get(instruction));
-			case S -> String.format("%s %s, %s, %x", mnemonic(), gprStr(instruction, RS1), gprStr(instruction, RS2), IMM_S.get(instruction));
-			case B -> String.format("%s %s, %s, %d", mnemonic(), gprStr(instruction, RS1), gprStr(instruction, RS2), IMM_B.getSigned(instruction));
-			case U -> String.format("%s %s, %x", mnemonic(), gprStr(instruction, RD), IMM_U.get(instruction));
-			case J -> String.format("%s %s, %x", mnemonic(), gprStr(instruction, RD), IMM_J.get(instruction));
+			case R -> String.format("%s %s, %s, %s", mnemonic(), InstructionUtils.gprStr(instruction, RD), InstructionUtils.gprStr(instruction, RS1), InstructionUtils.gprStr(instruction, RS2));
+			case I -> String.format("%s %s, %s, %d", mnemonic(), InstructionUtils.gprStr(instruction, RD), InstructionUtils.gprStr(instruction, RS1), IMM_I_UNCONSTRAINED.getSigned(instruction));
+			case I_SPLIT -> String.format("%s %s, %s, %x", mnemonic(), InstructionUtils.gprStr(instruction, RD), InstructionUtils.gprStr(instruction, RS1), IMM_I_04.get(instruction));
+			case S -> String.format("%s %s, %s, %x", mnemonic(), InstructionUtils.gprStr(instruction, RS1), InstructionUtils.gprStr(instruction, RS2), IMM_S.get(instruction));
+			case B -> String.format("%s %s, %s, %d", mnemonic(), InstructionUtils.gprStr(instruction, RS1), InstructionUtils.gprStr(instruction, RS2), IMM_B.getSigned(instruction));
+			case U -> String.format("%s %s, %x", mnemonic(), InstructionUtils.gprStr(instruction, RD), IMM_U.get(instruction));
+			case J -> String.format("%s %s, %x", mnemonic(), InstructionUtils.gprStr(instruction, RD), IMM_J.get(instruction));
 		};
 	}
 
@@ -206,7 +201,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		public String disassemble(int instruction, String targetLabel) {
-			return String.format("%s %s, %s, %s", mnemonic(), gprStr(instruction, RS1), gprStr(instruction, RS2), targetLabel);
+			return String.format("%s %s, %s, %s", mnemonic(), InstructionUtils.gprStr(instruction, RS1), InstructionUtils.gprStr(instruction, RS2), targetLabel);
 		}
 
 		@Override

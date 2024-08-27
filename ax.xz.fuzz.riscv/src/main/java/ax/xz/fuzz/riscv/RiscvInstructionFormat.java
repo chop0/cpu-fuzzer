@@ -4,6 +4,6 @@ import ax.xz.fuzz.riscv.base.RiscvBaseFormat;
 
 import java.util.List;
 
-public sealed interface RiscvInstructionFormat permits RiscvBaseFormat {
+public interface RiscvInstructionFormat {
 	List<RiscvInstructionField> fields();
 }

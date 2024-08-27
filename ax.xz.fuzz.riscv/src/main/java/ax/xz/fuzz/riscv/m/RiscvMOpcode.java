@@ -9,9 +9,9 @@ import java.util.Map;
 import static ax.xz.fuzz.riscv.RiscvInstructionField.OPCODE;
 import static ax.xz.fuzz.riscv.base.RiscvBaseField.*;
 import static ax.xz.fuzz.riscv.base.RiscvBaseFormat.R;
-import static ax.xz.fuzz.riscv.base.RiscvBaseOpcode.gprStr;
+import static ax.xz.fuzz.riscv.InstructionUtils.gprStr;
 
-public sealed interface RiscvMOpcode extends RiscvOpcode {
+sealed interface RiscvMOpcode extends RiscvOpcode {
 	@Override
 	default String disassemble(int instruction) {
 		return String.format("%s %s, %s, %s", mnemonic(), gprStr(instruction, RD), gprStr(instruction, RS1), gprStr(instruction, RS2));

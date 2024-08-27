@@ -2,10 +2,13 @@ package ax.xz.fuzz.riscv.base;
 
 import ax.xz.fuzz.blocks.NoPossibilitiesException;
 import ax.xz.fuzz.instruction.ResourcePartition;
+import ax.xz.fuzz.riscv.InstructionUtils;
 import ax.xz.fuzz.riscv.RiscvInstructionBuilder;
 import ax.xz.fuzz.riscv.RiscvInstructionField;
 
 import java.util.random.RandomGenerator;
+
+import static ax.xz.fuzz.riscv.InstructionUtils.pickBits;
 
 public enum RiscvBaseField implements RiscvInstructionField {
 	RD(5),
@@ -32,16 +35,6 @@ public enum RiscvBaseField implements RiscvInstructionField {
 	@Override
 	public int width() {
 		return width;
-	}
-
-	private int pickBits(int value, int startInclusive, int endInclusive) {
-		int mask = (1 << (endInclusive - startInclusive + 1)) - 1;
-		return (value >>> startInclusive) & mask;
-	}
-
-	private int setBits(int value, int startInclusive, int endInclusive, int bits) {
-		int mask = (1 << (endInclusive - startInclusive + 1)) - 1;
-		return (value & ~(mask << startInclusive)) | ((bits & mask) << startInclusive);
 	}
 
 	@Override
@@ -75,26 +68,26 @@ public enum RiscvBaseField implements RiscvInstructionField {
 	@Override
 	public int apply(int instruction, int value) {
 		return switch (this) {
-			case RD -> setBits(instruction, 7, 11, value);
-			case FUNCT3 -> setBits(instruction, 12, 14, value);
-			case RS1 -> setBits(instruction, 15, 19, value);
-			case RS2 -> setBits(instruction, 20, 24, value);
-			case FUNCT7 -> setBits(instruction, 25, 31, value);
+			case RD -> InstructionUtils.setBits(instruction, 7, 11, value);
+			case FUNCT3 -> InstructionUtils.setBits(instruction, 12, 14, value);
+			case RS1 -> InstructionUtils.setBits(instruction, 15, 19, value);
+			case RS2 -> InstructionUtils.setBits(instruction, 20, 24, value);
+			case FUNCT7 -> InstructionUtils.setBits(instruction, 25, 31, value);
 
-			case IMM_I_UNCONSTRAINED -> setBits(instruction, 20, 31, value);
-			case IMM_I_511 -> setBits(instruction, 25, 31, value);
+			case IMM_I_UNCONSTRAINED -> InstructionUtils.setBits(instruction, 20, 31, value);
+			case IMM_I_511 -> InstructionUtils.setBits(instruction, 25, 31, value);
 
-			case IMM_I_04 -> setBits(instruction, 20, 24, value);
+			case IMM_I_04 -> InstructionUtils.setBits(instruction, 20, 24, value);
 
-			case IMM_S -> setBits(
-				setBits(instruction, 7, 11, pickBits(value, 0, 4)),
+			case IMM_S -> InstructionUtils.setBits(
+				InstructionUtils.setBits(instruction, 7, 11, pickBits(value, 0, 4)),
 				25, 31, pickBits(value, 5, 11)
 			);
 
-			case IMM_B -> setBits(
-				setBits(
-					setBits(
-						setBits(instruction, 7, 7, pickBits(value, 11, 11)),
+			case IMM_B -> InstructionUtils.setBits(
+				InstructionUtils.setBits(
+					InstructionUtils.setBits(
+						InstructionUtils.setBits(instruction, 7, 7, pickBits(value, 11, 11)),
 						8, 11, pickBits(value, 1, 4)
 					),
 					25, 30, pickBits(value, 5, 10)
@@ -103,11 +96,11 @@ public enum RiscvBaseField implements RiscvInstructionField {
 			);
 
 
-			case IMM_U -> setBits(instruction, 12, 31, value);
-			case IMM_J -> setBits(
-				setBits(
-					setBits(
-						setBits(instruction, 12, 19, pickBits(value, 12, 19)),
+			case IMM_U -> InstructionUtils.setBits(instruction, 12, 31, value);
+			case IMM_J -> InstructionUtils.setBits(
+				InstructionUtils.setBits(
+					InstructionUtils.setBits(
+						InstructionUtils.setBits(instruction, 12, 19, pickBits(value, 12, 19)),
 						20, 20, pickBits(value, 11, 11)
 					),
 					21, 30, pickBits(value, 1, 10)
