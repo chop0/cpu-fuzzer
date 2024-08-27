@@ -2,17 +2,17 @@ package ax.xz.fuzz.riscv.base;
 
 import ax.xz.fuzz.riscv.InstructionUtils;
 import ax.xz.fuzz.riscv.RiscvInstructionField;
-import ax.xz.fuzz.riscv.RiscvInstructionFormat;
 import ax.xz.fuzz.riscv.RiscvOpcode;
 
 import java.util.Map;
 
-import static ax.xz.fuzz.arch.Architecture.activeArchitecture;
 import static ax.xz.fuzz.riscv.RiscvInstructionField.OPCODE;
 import static ax.xz.fuzz.riscv.base.RiscvBaseField.*;
 import static ax.xz.fuzz.riscv.base.RiscvBaseFormat.*;
 
 public sealed interface RiscvBaseOpcode extends RiscvOpcode {
+	@Override
+	RiscvBaseFormat format();
 
 	@Override
 	default String disassemble(int instruction) {
@@ -62,7 +62,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -105,7 +105,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -134,7 +134,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -161,7 +161,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -191,7 +191,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -214,12 +214,10 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		JAL(J, 0b1101111),
 		JALR(I, 0b1100111, 0);
 
-		private final int opcode;
 		private final RiscvBaseFormat format;
 		private final Map<RiscvInstructionField, Integer> fieldConstraints;
 
 		JumpOpcode(RiscvBaseFormat format, int opcode, int funct3) {
-			this.opcode = opcode;
 			this.format = format;
 			this.fieldConstraints = Map.of(
 				OPCODE, opcode,
@@ -228,7 +226,6 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		JumpOpcode(RiscvBaseFormat format, int opcode) {
-			this.opcode = opcode;
 			this.format = format;
 			this.fieldConstraints = Map.of(
 				OPCODE, opcode
@@ -236,7 +233,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -266,7 +263,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -280,12 +277,10 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		ECALL(0b1110011, 0x000, 0),
 		EBREAK(0b1110011, 0x001, 1);
 
-		private final int opcode;
 		private final RiscvBaseFormat format;
 		private final Map<RiscvInstructionField, Integer> fieldConstraints;
 
 		EnvironmentOpcode(int opcode, int funct3, int imm) {
-			this.opcode = opcode;
 			this.format = I;
 			this.fieldConstraints = Map.of(
 				OPCODE, opcode,
@@ -295,7 +290,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -330,7 +325,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -368,7 +363,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -394,7 +389,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 
@@ -419,7 +414,7 @@ public sealed interface RiscvBaseOpcode extends RiscvOpcode {
 		}
 
 		@Override
-		public RiscvInstructionFormat format() {
+		public RiscvBaseFormat format() {
 			return format;
 		}
 

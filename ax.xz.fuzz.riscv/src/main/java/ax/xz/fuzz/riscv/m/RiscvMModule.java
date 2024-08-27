@@ -40,15 +40,15 @@ public final class RiscvMModule implements RiscvModule {
 	}
 
 	public static RiscvMModule rv64m() {
-		return RV32M;
+		return RV64M;
 	}
 
 	public static RiscvMModule rv32m() {
-		return RV64M;
+		return RV32M;
 	}
 
 	@Override
 	public String toString() {
-		return is64 ? "rv64m" : "rv32m";
+		return "rv%dm (%d)".formatted(is64 ? 64 : 32, opcodes().size());
 	}
 }

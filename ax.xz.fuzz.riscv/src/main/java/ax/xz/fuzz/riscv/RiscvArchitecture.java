@@ -27,8 +27,6 @@ import static ax.xz.fuzz.runtime.ExecutionResult.*;
 
 
 public class RiscvArchitecture implements Architecture {
-	public static int INSTRUCTION_WIDTH_BITS = 32;
-
 	private final RiscvBaseModule baseModule;
 	private final List<RiscvModule> modules;
 	private final Opcode[] allOpcodes;
@@ -47,8 +45,9 @@ public class RiscvArchitecture implements Architecture {
 		var registerIndices = new HashMap<RiscvRegister, Integer>();
 		var registerNames = new HashMap<String, RiscvRegister>();
 
-		var modulesList = new ArrayList<>(List.of(otherModules));
+		var modulesList = new ArrayList<RiscvModule>();
 		modulesList.add(baseModule);
+		modulesList.addAll(List.of(otherModules));
 
 		for (var module : modulesList) {
 			for (var register : module.registers()) {
@@ -221,9 +220,6 @@ public class RiscvArchitecture implements Architecture {
 			case MismatchSet(Success _, _),
 			     MismatchSet(_, Success _) -> true;
 
-			case MismatchSet(Fault _, Fault _)
-				when !a.getClass().equals(b.getClass()) -> true;
-
 			case MismatchSet(Fault.Sigalrm _, _),
 			     MismatchSet(_, Fault.Sigalrm _) -> true;
 
@@ -260,8 +256,6 @@ public class RiscvArchitecture implements Architecture {
 
 	@Override
 	public String toString() {
-		return new StringJoiner(", ", baseModule.toString() + "[", "]")
-			.add("modules=" + modules)
-			.toString();
+		return "rv%d%s".formatted(baseModule.xlenBytes() * 8, modules.toString());
 	}
 }

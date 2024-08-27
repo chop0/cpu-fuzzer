@@ -53,7 +53,7 @@ public sealed abstract class RiscvBaseModule implements RiscvModule {
 
 		@Override
 		public String toString() {
-			return "rv32i";
+			return "rv32i (%d)".formatted(opcodes().size());
 		}
 	}
 
@@ -69,7 +69,7 @@ public sealed abstract class RiscvBaseModule implements RiscvModule {
 
 		@Override
 		public String toString() {
-			return "rv64i";
+			return "rv64i (%d)".formatted(opcodes().size());
 		}
 	}
 }

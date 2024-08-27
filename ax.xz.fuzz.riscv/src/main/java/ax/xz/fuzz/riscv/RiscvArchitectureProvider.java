@@ -2,10 +2,10 @@ package ax.xz.fuzz.riscv;
 
 import ax.xz.fuzz.arch.Architecture;
 import ax.xz.fuzz.arch.ArchitectureProvider;
+import ax.xz.fuzz.riscv.a.RiscvAModule;
 import ax.xz.fuzz.riscv.base.RiscvBaseModule;
 import ax.xz.fuzz.riscv.m.RiscvMModule;
 
-import java.lang.foreign.Linker;
 import java.lang.foreign.SymbolLookup;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -43,7 +43,7 @@ public class RiscvArchitectureProvider implements ArchitectureProvider {
 				throw new RuntimeException("Failed to load native library", e);
 			}
 
-			INSTANCE = new RiscvArchitecture(new RiscvBaseModule.RV64I(), RiscvMModule.rv64m());
+			INSTANCE = new RiscvArchitecture(new RiscvBaseModule.RV64I(), RiscvMModule.rv64m(), RiscvAModule.rv64a());
 			System.out.println("Loaded local uarch: " + INSTANCE);
 		}
 	}
